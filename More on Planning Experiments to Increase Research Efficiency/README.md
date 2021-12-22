@@ -23,3 +23,8 @@ This project presented the effects of planning eperiments to increase research e
 * Residual plot
 # Project Procedures
 ## Design 
+Constructed the design of reslution III it requires the minimum length of the letter pattern of the generators using five factors and two generators to assess the experiment. 
+## Analysis of Variance
+Will not include the interaction effects of the model, so instead they will be calculuated as error.
+# Results
+After our analysis was complete, there were no effect onto the model, so the model is not significant which means that there are no factors in the model can increase research efficiency. Therefore, the experiment needs more on planning experiments using different effect factors to increase reasearch efficiency and create a model for it.
