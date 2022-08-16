@@ -19,7 +19,7 @@ This project presented the effects of planning eperiments to increase research e
 * Sum of Squares
 * Degrees of Freedom
 * Test Hypothesis
-* F obsertaion and F critical value test
+* F observation and F critical value test
 * Residual plot
 # Project Procedures
 ## Design 
