@@ -15,3 +15,5 @@ The data came from the Design and Analysis of Experiments Eighth Edition by Doug
 * Design: One-Quarter Fraction of 2^(k-2) Factorial
 * Analysis of Variance
 * Residual Plot
+
+# Fall 2022
