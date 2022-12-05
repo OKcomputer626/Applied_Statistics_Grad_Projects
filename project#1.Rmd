@@ -1,0 +1,348 @@
+---
+title: "Stat"
+author: "Andres Gonzalez"
+date: "2022-12-05"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+library(skimr)
+library(GGally)
+library(ggpattern)
+library(ggrepel)
+```
+
+```{r}
+df <- read_csv("Datasets/life.csv")
+```
+
+```{r}
+glimpse(df)
+```
+
+```{r}
+df1 <- df %>%
+  filter(Year %in% "2014",
+         Status %in% "Developing") %>%
+  select(-Country,-Year, -Status) %>%
+  drop_na()
+```
+
+
+
+```{r}
+n = nrow(df1)
+mod0 = lm(`Life expectancy` ~ 1, data = df1)
+mod.all = lm(`Life expectancy` ~., data = df1)
+step(mod0, scope = list(lower = mod0, upper = mod.all))
+```
+
+```{r}
+mod.full <- lm(`Life expectancy` ~ `Income composition of resources` + 
+    `Adult Mortality` + `HIV/AIDS` + `Total expenditure`, data = df1)
+summary(mod.full)
+```
+
+```{r}
+xmat = df1 |>
+select(-`Life expectancy`) |>
+select_if(is.numeric)
+head(xmat)
+```
+
+```{r}
+dim(xmat)
+```
+
+```{r}
+library(leaps)
+mod = regsubsets(xmat, df1$`Life expectancy`, nvmax = 18)
+summary.mod = summary(mod)
+names(summary.mod)
+```
+
+```{r}
+summary.mod$which
+```
+
+```{r}
+summary.mod$rsq #check R^2
+```
+
+```{r}
+summary.mod$adjr2 #check adjusted R^2
+```
+
+```{r}
+plot(summary.mod$adjr2)
+```
+
+```{r}
+plot(summary.mod$cp) #check Mallows' Cp
+abline(1,1)
+```
+
+```{r}
+summary.mod$cp
+```
+
+```{r}
+mod.cp = lm(`Life expectancy` ~., data = df1)
+summary(mod.cp)
+```
+
+```{r}
+anova(mod.full,mod.cp)
+```
+
+
+```{r}
+add1(mod.full, ~.+`Income composition of resources`*`Adult Mortality`+`Income composition of resources`*`HIV/AIDS`+`Income composition of resources`*`Total expenditure`, test = 'F')
+```
+
+```{r}
+mod.2 = update(mod.full, ~.+`Income composition of resources`:`Total expenditure`+`Income composition of resources`:`HIV/AIDS`)
+summary(mod.2)
+```
+
+
+
+```{r}
+library(broom)
+model.table = augment(mod.2)
+names(model.table)
+ggplot(model.table, aes(x = .fitted, y = .resid)) +
+  geom_point() +
+  geom_hline(yintercept = 0, colour = 'blue') +
+  labs(x = 'Fitted Values', y = 'Residuals') +
+  ggtitle('Residual vs Fit') +
+  theme_bw()
+```
+
+```{r}
+ggplot(model.table, aes(sample = .resid)) +
+  stat_qq() +
+  stat_qq_line() +
+  ggtitle('Normal Q-Q Plot') +
+  theme_bw()
+```
+
+```{r}
+shapiro.test(resid(mod.2))
+```
+
+```{r}
+library(car)
+mod.boxcox = boxCox(mod.2, lambda = seq(-2, 3, length=10))
+```
+
+```{r}
+lambda.opt = mod.boxcox$x[which.max(mod.boxcox$y)] #find the optimal lambda
+lambda.opt
+```
+
+```{r}
+df1 = df1 |>
+mutate(life_boxcox = `Life expectancy`^(lambda.opt))
+mod.3 = lm(life_boxcox ~ `Income composition of resources` + 
+    `Adult Mortality` + `HIV/AIDS` + `Total expenditure` + `Income composition of resources`:`Total expenditure` + 
+    `Income composition of resources`:`HIV/AIDS`, data = df1)
+summary(mod.3)
+```
+
+```{r}
+mod_table = augment(mod.3)
+names(mod_table)
+```
+
+```{r}
+ggplot(mod_table, aes(x = .fitted, y = .resid)) +
+geom_point() +
+geom_hline(yintercept = 0, colour = 'blue') +
+labs(x = 'Fitted Values', y = 'Residuals') +
+ggtitle('Residual vs Fit') +
+theme_bw()
+```
+
+```{r}
+ggplot(mod_table, aes(sample = .resid)) +
+stat_qq() +
+stat_qq_line() +
+ggtitle('Normal Q-Q Plot') +
+theme_bw()
+```
+
+```{r}
+shapiro.test(resid(mod.3))
+```
+
+
+```{r}
+plot(mod.3, which = 4)
+```
+
+```{r}
+ts = rstudent(mod.3)
+which(ts > 3)
+```
+
+```{r}
+rs = rstandard(mod.3)
+which(rs > 3)
+```
+
+```{r}
+mod.3_delete = lm(life_boxcox ~ `Income composition of resources` + 
+    `Adult Mortality` + `HIV/AIDS` + `Total expenditure` + `Income composition of resources`:`Total expenditure` + 
+    `Income composition of resources`:`HIV/AIDS`, data = df1[-c(41), ])
+```
+
+```{r}
+summary(mod.3_delete)
+```
+
+
+```{r}
+mod_table = augment(mod.3_delete)
+names(mod_table)
+```
+
+
+```{r}
+ggplot(mod_table, aes(x = .fitted, y = .resid)) +
+geom_point() +
+geom_hline(yintercept = 0, colour = 'blue') +
+labs(x = 'Fitted Values', y = 'Residuals') +
+ggtitle('Residual vs Fit') +
+theme_bw()
+```
+
+```{r}
+ggplot(mod_table, aes(sample = .resid)) +
+stat_qq() +
+stat_qq_line() +
+ggtitle('Normal Q-Q Plot') +
+theme_bw()
+```
+
+```{r}
+shapiro.test(resid(mod.3_delete))
+```
+
+```{r}
+mod.3 %>% augment() %>%
+ggplot(., aes(x = .resid)) +
+geom_histogram_pattern(pattern_fill = "#2F3C7E",
+                       fill = "#FBEAEB",
+                       color = "black") +
+labs(x = 'Residual') +
+ggtitle('Histogram of Residuals') +
+theme_bw()
+```
+
+Looks normally distributed
+`
+### Visualization
+
+```{r}
+df1 <- df %>%
+  filter(Year %in% "2014",
+         Status %in% "Developing") %>%
+  drop_na()
+```
+
+```{r}
+df1 %>%
+  arrange(desc(`Life expectancy`)) %>%
+  head(10) %>%
+  ggplot(aes(x = reorder(Country,-`Life expectancy`), y = `Life expectancy`)) +
+  geom_bar_pattern(stat = "identity",
+                   pattern_fill = "#F96167",
+                   fill = "#FCE77D") +
+  geom_text(aes(label=`Life expectancy`), vjust=0, color="black", size=4.5) +
+  labs(x = "Countries",
+       title = "Highest Countries Life Expectancy in 2014") +
+  theme_minimal()
+```
+
+```{r}
+df1 %>%
+  arrange(`Life expectancy`) %>%
+  head(10) %>%
+  ggplot(aes(x = reorder(Country,`Life expectancy`), y = `Life expectancy`)) +
+  geom_bar_pattern(stat = "identity",
+                   pattern = "circle",
+                   pattern_fill = "#CCF381",
+                   fill = "#4831D4") +
+  geom_text(aes(label=`Life expectancy`), vjust=0, color="black", size=4.5) +
+  labs(x = "Countries",
+       title = "Lowest Countries Life Expectancy in 2014") +
+  theme_minimal()
+```
+
+```{r}
+df1 %>% 
+  summarize(`Income composition of resources` = mean(`Income composition of resources`),
+            LieExp = mean(`Life expectancy`))
+```
+
+
+```{r}
+df1 %>%
+  ggplot(aes(x = `Income composition of resources`, y = `Life expectancy`, label = Country)) +
+geom_point(shape = 21, color = "white", fill = "#ADEFD1FF", size = 2) +
+  geom_text_repel(color = "#ADEFD1FF") +
+  geom_hline(yintercept = 68.74, color = "#9CC3D5FF", alpha = 0.6, linetype = "dashed") +
+  geom_vline(xintercept = 0.64, color = "#9CC3D5FF", alpha = 0.6, linetype = "dashed") +
+  annotate("text", family = "Helvetica", fontface = "bold",
+           x = 0.235 , y = 70, hjust = 0, alpha = 0.3, color = "#ADEFD1FF",
+           label = "Average Life Expetancy") +
+  annotate("text", family = "Helvetica", fontface = "bold",
+           x = 0.63, y = 60, alpha = 0.3, angle = 90, size = 4, color = "#ADEFD1FF",
+           label = "Average Income composition of resources") +
+  xlab("Income composition of resources") + ylab("Life Expetancy") +
+  labs(title = "Life expectancy and Income composition of resources",
+       subtitle = "Developing Countires in 2014") +
+  scale_y_continuous(limits = c(40, 80)) +
+  ggthemes::theme_solarized_2(light = FALSE, base_family = "Helvetica") +
+  theme(panel.background = element_rect(color = "#89CFF0"),
+        plot.title = element_text(size = 18, face = "bold", color = "white"),
+        plot.subtitle = element_text(size = 12, color = "#00FFEF"),
+        plot.caption = element_text(size = 14, color = "#89CFF0"),
+        axis.title = element_text(size = 14, color = "white"),
+        axis.text = element_text(size = 12, color = "#89CFF0"),
+        panel.grid.minor.x = element_blank())
+```
+
+```{r}
+df1 %>%
+  ggplot(aes(x = `Income composition of resources`, y = `Life expectancy`, label = Country)) +
+geom_point(shape = 21, color = "white", fill = "#ADEFD1FF", size = 2) +
+  geom_text_repel(color = "#ADEFD1FF") +
+  geom_hline(yintercept = 68.74, color = "#9CC3D5FF", alpha = 0.6, linetype = "dashed") +
+  geom_vline(xintercept = 0.64, color = "#9CC3D5FF", alpha = 0.6, linetype = "dashed") +
+  annotate("text", family = "Helvetica", fontface = "bold",
+           x = 0.235 , y = 70, hjust = 0, alpha = 0.3, color = "#ADEFD1FF",
+           label = "Average Life Expetancy") +
+  annotate("text", family = "Helvetica", fontface = "bold",
+           x = 0.63, y = 60, alpha = 0.3, angle = 90, size = 4, color = "#ADEFD1FF",
+           label = "Average Income composition of resources") +
+  xlab("Income composition of reosurces") + ylab("Life Expetancy") +
+  labs(title = "Life expectancy and Income composition of resources",
+       subtitle = "Developing Countires in 2014") +
+  scale_y_continuous(limits = c(40, 80)) +
+  ggthemes::theme_solarized_2(light = FALSE, base_family = "Helvetica") +
+  theme(panel.background = element_rect(color = "#89CFF0"),
+        plot.title = element_text(size = 18, face = "bold", color = "white"),
+        plot.subtitle = element_text(size = 12, color = "#00FFEF"),
+        plot.caption = element_text(size = 14, color = "#89CFF0"),
+        axis.title = element_text(size = 14, color = "white"),
+        axis.text = element_text(size = 12, color = "#89CFF0"),
+        panel.grid.minor.x = element_blank())
+```
+
