@@ -1,0 +1,197 @@
+---
+title: "Stat"
+author: "Andres Gonzalez"
+date: "2022-12-05"
+output:
+  word_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+library(skimr)
+library(GGally)
+library(ggpattern)
+library(ggrepel)
+library(gt)
+library(gtExtras)
+```
+
+```{r}
+df <- read_csv("Datasets/life.csv")
+```
+
+```{r}
+df
+glimpse(df)
+```
+
+```{r}
+ggplot(data = df, mapping = aes(x = factor(Year), y = `Life expectancy`)) +
+  geom_boxplot() +
+  stat_summary(fun.y=mean, geom="point", size=2, color="red") +
+  labs(x = "Year",
+       title = "Life Expectancy and Year") +
+  theme(plot.title = element_text(size = 14))
+```
+
+```{r}
+ggplot(df, aes(Status, `Life expectancy`, fill = Status)) + 
+  geom_violin() +
+  stat_summary(fun.y=mean, geom="point", shape=23, size=2) +
+  labs(title = "Life Expectancy and Status") +
+  theme(plot.title = element_text(size = 14))
+```
+
+
+```{r}
+df1 <- df %>%
+  filter(Year %in% "2014",
+         Status %in% "Developing") %>%
+  select(-Country,-Year, -Status) %>%
+  drop_na()
+```
+
+
+
+```{r}
+n = nrow(df1)
+mod0 = lm(`Life expectancy` ~ 1, data = df1)
+mod.all = lm(`Life expectancy` ~., data = df1)
+step(mod0, scope = list(lower = mod0, upper = mod.all))
+```
+
+```{r}
+mod.full <- lm(`Life expectancy` ~ `Income composition of resources` + 
+    `Adult Mortality` + `HIV/AIDS` + `Total expenditure`, data = df1)
+summary(mod.full)
+```
+
+```{r}
+xmat = df1 |>
+select(-`Life expectancy`) |>
+select_if(is.numeric)
+head(xmat)
+```
+
+```{r}
+dim(xmat)
+```
+
+```{r}
+library(leaps)
+mod = regsubsets(xmat, df1$`Life expectancy`, nvmax = 18)
+summary.mod = summary(mod)
+names(summary.mod)
+```
+
+```{r}
+summary.mod$which
+```
+
+```{r}
+summary.mod$rsq #check R^2
+```
+
+```{r}
+summary.mod$adjr2 #check adjusted R^2
+```
+
+```{r}
+plot(summary.mod$adjr2)
+```
+
+```{r}
+plot(summary.mod$cp) #check Mallows' Cp
+abline(1,1)
+```
+
+```{r}
+summary.mod$cp
+```
+
+```{r}
+mod.cp = lm(`Life expectancy` ~., data = df1)
+summary(mod.cp)
+```
+
+```{r}
+anova(mod.full,mod.cp)
+```
+
+
+```{r}
+add1(mod.full, ~.+`Income composition of resources`*`Adult Mortality`+`Income composition of resources`*`HIV/AIDS`+`Income composition of resources`*`Total expenditure`, test = 'F')
+```
+
+```{r}
+mod.2 = update(mod.full, ~.+`Income composition of resources`:`Total expenditure`+`Income composition of resources`:`HIV/AIDS`)
+summary(mod.2)
+```
+
+
+
+```{r}
+library(broom)
+model.table = augment(mod.2)
+names(model.table)
+ggplot(model.table, aes(x = .fitted, y = .resid)) +
+  geom_point() +
+  geom_hline(yintercept = 0, colour = 'blue') +
+  labs(x = 'Fitted Values', y = 'Residuals') +
+  ggtitle('Residual vs Fit') +
+  theme_bw()
+```
+
+```{r}
+ggplot(model.table, aes(sample = .resid)) +
+  stat_qq() +
+  stat_qq_line() +
+  ggtitle('Normal Q-Q Plot') +
+  theme_bw()
+```
+
+```{r}
+shapiro.test(resid(mod.2))
+```
+
+```{r}
+mod_table = augment(mod.2)
+names(mod_table)
+```
+
+
+
+```{r}
+plot(mod.2, which = 4)
+```
+
+```{r}
+ts = rstudent(mod.2)
+which(ts > 3)
+```
+
+```{r}
+rs = rstandard(mod.2)
+which(rs > 3)
+```
+
+
+```{r}
+mod.2 %>% augment() %>%
+ggplot(., aes(x = .resid)) +
+geom_histogram(fill = "#FBEAEB",
+               color = "black") +
+labs(x = 'Residual') +
+ggtitle('Histogram of Residuals') +
+theme_bw() +
+  theme(plot.title = element_text(size = 14))
+```
+
+Looks normally distributed
+
+
