@@ -28,7 +28,7 @@ Project for Experimental Design & Analysis (CSULB: STAT 530)
 
 # Fall 2022
 
-## [Disney Movie Sucess]()
+## [Disney Movie Sucess](https://github.com/OKcomputer626/Applied_Statistics_Grad_Projects/tree/main/Disney%20Movie%20Sucess)
 
 Project for Introduction to R (CSULB: STAT 471)
 
