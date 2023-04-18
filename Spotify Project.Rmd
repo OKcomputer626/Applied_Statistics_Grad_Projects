@@ -1,0 +1,377 @@
+---
+title: "Practie"
+author: "Andres Gonzalez"
+date: "2023-04-11"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(showtext)
+library(ggtext)
+library(forecast)
+```
+
+
+```{r}
+# Adding font
+font_add_google(family = "montse", "Montserrat")
+
+showtext_opts(dpi = 300)
+showtext_auto()
+
+# logo
+add_logo <- function(plot_path, logo_path, logo_position, 
+                     logo_scale = 10){
+    # Requires magick R Package https://github.com/ropensci/magick
+    # Useful error message for logo position
+    if (!logo_position %in% c("top right", "top left", "bottom right", "bottom left")) {
+        stop("Error Message: Uh oh! Logo Position not recognized\n  Try: logo_positon = 'top left', 'top right', 'bottom left', or 'bottom right'")
+    }
+    # read in raw images
+    plot <- magick::image_read(plot_path)
+    logo_raw <- magick::image_read(logo_path)
+    # get dimensions of plot for scaling
+    plot_height <- magick::image_info(plot)$height
+    plot_width <- magick::image_info(plot)$width
+    # default scale to 1/10th width of plot
+    # Can change with logo_scale
+    logo <- magick::image_scale(logo_raw, as.character(plot_width/logo_scale))
+    # Get width of logo
+    logo_width <- magick::image_info(logo)$width
+    logo_height <- magick::image_info(logo)$height
+    # Set position of logo
+    # Position starts at 0,0 at top left
+    # Using 0.01 for 1% - aesthetic padding
+    if (logo_position == "top right") {
+        x_pos = plot_width - logo_width - 0.01 * plot_width
+        y_pos = 0.01 * plot_height
+    } else if (logo_position == "top left") {
+        x_pos = 0.01 * plot_width
+        y_pos = 0.01 * plot_height
+    } else if (logo_position == "bottom right") {
+        x_pos = plot_width - logo_width - 0.01 * plot_width
+        y_pos = plot_height - logo_height - 0.01 * plot_height
+    } else if (logo_position == "bottom left") {
+        x_pos = 0.01 * plot_width
+        y_pos = plot_height - logo_height - 0.01 * plot_height
+    }
+    # Compose the actual overlay
+    magick::image_composite(plot, logo, offset = paste0("+", x_pos, "+", y_pos))
+}
+```
+
+
+```{r}
+library(spotifyr)
+library(purrr)
+
+
+```
+
+```{r}
+spotify <- read_csv("Datasets/spotify_songs.csv")
+```
+
+```{r}
+spotify_filtered <- spotify %>%
+  filter(playlist_genre %in% "rock")
+
+spotify_filtered <- spotify_filtered %>%
+  mutate(release_year = as.numeric(substr(track_album_release_date, 1, 4)))
+
+# Fetch your playlists
+my_playlists <- get_my_playlists(limit = 50)
+
+
+id <- my_playlists %>%
+  filter(name %in% c("This Is Vampire Weekend",
+                     "This Is Muse",
+                     "This Is The Clash",
+                     "This Is Blur",
+                     "This Is The Cure",
+                     "This Is The 1975",
+                     "This Is The Strokes",
+                     "All New Rock",
+                     "Rock This",
+                     "This Is Gorillaz",
+                     "This Is The Stone Roses",
+                     "This Is Oasis",
+                     "This Is Joy Division",
+                     "This Is Sam Fender",
+                     "This Is The Smiths")) %>%
+  pull(id)
+
+filtered_playlist <- get_playlist_audio_features(username = "spotify", playlist_uris = id)
+
+filtered_playlist <- filtered_playlist %>%
+  mutate(release_year = as.numeric(substr(track.album.release_date, 1, 4)))
+
+combined_data <- bind_rows(spotify_filtered, filtered_playlist)
+
+combined_data <- combined_data %>%
+  mutate(track_name = ifelse(is.na(track_name), track.name, track_name)) %>%
+  select(-track.name)
+
+combined_data <- combined_data %>%
+  distinct(track_name, .keep_all = TRUE)
+```
+
+```{r}
+write_csv(combined_data, "spotify data.csv")
+```
+
+```{r}
+averages_by_year <- combined_data %>%
+  group_by(release_year) %>%
+  summarise(
+    avg_danceability = mean(danceability, na.rm = TRUE),
+    avg_energy = mean(energy, na.rm = TRUE),
+    avg_key = mean(key, na.rm = TRUE),
+    avg_loudness = mean(loudness, na.rm = TRUE),
+    avg_mode = mean(mode, na.rm = TRUE),
+    avg_speechiness = mean(speechiness, na.rm = TRUE),
+    avg_acousticness = mean(acousticness, na.rm = TRUE),
+    avg_instrumentalness = mean(instrumentalness, na.rm = TRUE),
+    avg_liveness = mean(liveness, na.rm = TRUE),
+    avg_valence = mean(valence, na.rm = TRUE),
+    avg_tempo = mean(tempo, na.rm = TRUE))
+
+averages_by_year <- averages_by_year %>%
+  filter(release_year >= 1963)
+
+group_audio <- averages_by_year %>%
+  pivot_longer(cols = avg_danceability:avg_tempo,
+               names_to = "audio_features",
+               values_to = "count")
+
+group_audio %>%
+  ggplot(aes(x = release_year, y = count, color = audio_features)) +
+  geom_line(linewidth = 0.8) 
+```
+
+```{r}
+group_audio <- group_audio %>%
+  filter(!audio_features %in% c("avg_tempo","avg_loudness","avg_key"))
+
+plot <- group_audio %>%
+  filter(audio_features %in% c("avg_acousticness", "avg_danceability", "avg_energy","avg_instrumentalness")) %>%
+  ggplot(aes(x = release_year, y = count, color = audio_features)) +
+  geom_line(linewidth = 1.2) +
+  geom_point(size = 2.2) +
+  geom_smooth(method = "lm", se = FALSE, linetype = "dashed", size = 0.7) +
+  paletteer::scale_color_paletteer_d(palette = "ggthemes::wsj_rgby",
+                                     labels = c("Acousticness","Danceability","Energy","Instrumentalness")) +
+  scale_y_continuous(limits = c(0,1),
+                     breaks = seq(0,1, by = 0.2)) +
+  scale_x_continuous(breaks = seq(1960, 2023, by = 5)) +
+  labs(
+    title = "<span style = 'color:#1ED760;'>Spotify</span> Audio Features",
+    x = "Year",
+    caption = "Source: Spotify API"
+  ) +
+  theme_minimal() +
+  theme(
+    text = element_text("montse"),
+    plot.title = element_markdown(size = 36, face = "bold"),
+    plot.title.position = "plot",
+    plot.caption = element_text(size = 10),
+    legend.title = element_blank(),
+    legend.position = "top",,
+    legend.text = element_text(size = 12),
+    axis.title = element_text(size = 16),
+    axis.text = element_text(size = 14),
+    plot.margin = margin(20, 10, 10, 10, "pt")
+  )
+
+ggsave(plot = plot,
+       filename = "spotify.png",
+       height = 10, width = 14,
+       bg = "white")
+
+plot_logo <- add_logo(
+  plot_path = here::here("spotify.png"),
+  logo_path = here::here("spotify-2-logo.png"),
+  logo_position = "top right",
+  logo_scale = 15)
+
+magick::image_write(image = plot_logo, 
+            here::here("spotify.png"))
+plot_logo
+```
+
+```{r}
+plot2 <- group_audio %>%
+  filter(audio_features %in% c("avg_liveness", "avg_mode", "avg_speechiness","avg_valence")) %>%
+  ggplot(aes(x = release_year, y = count, color = audio_features)) +
+  geom_line(linewidth = 1.2) +
+  geom_point(size = 2.2) +
+  geom_smooth(method = "lm", se = FALSE, linetype = "dashed", size = 0.7) +
+  paletteer::scale_color_paletteer_d(palette = "ggthemes::Nuriel_Stone",
+                                     labels = c("Liveness","Mode","Speechiness","Valence")) +
+  scale_y_continuous(limits = c(0,1),
+                     breaks = seq(0,1, by = 0.2)) +
+  scale_x_continuous(breaks = seq(1960, 2023, by = 5)) +
+  labs(
+    title = "<span style = 'color:#1ED760;'>Spotify</span> Audio Features",
+    x = "Year",
+    caption = "Source: Spotify API"
+  ) +
+  theme_minimal() +
+  theme(
+    text = element_text("montse"),
+    plot.title = element_markdown(size = 36, face = "bold"),
+    plot.title.position = "plot",
+    plot.caption = element_text(size = 10),
+    legend.title = element_blank(),
+    legend.position = "top",,
+    legend.text = element_text(size = 12),
+    axis.title = element_text(size = 16),
+    axis.text = element_text(size = 14),
+    plot.margin = margin(20, 10, 10, 10, "pt")
+  )
+
+ggsave(plot = plot2,
+       filename = "spotify2.png",
+       height = 10, width = 14,
+       bg = "white")
+
+plot_logo <- add_logo(
+  plot_path = here::here("spotify2.png"),
+  logo_path = here::here("spotify-2-logo.png"),
+  logo_position = "top right",
+  logo_scale = 15)
+
+magick::image_write(image = plot_logo, 
+            here::here("spotify2.png"))
+plot_logo
+```
+
+```{r}
+ts_spotify <- ts(averages_by_year$avg_danceability,start = 1963,frequency = 1)
+adfTest(ts_spotify, lags = 3, type = "ct")
+```
+
+```{r}
+ts_spotify_diff <- diff(ts_spotify)
+
+adfTest(ts_spotify_diff, lags = 3, type = "ct")
+```
+
+```{r}
+# Find the best ARIMA model using auto.arima()
+best_model <- auto.arima(ts_spotify, d = 1)
+
+# Display the best model
+summary(best_model)
+```
+
+```{r}
+res11 <- residuals(best_model)
+
+
+par(mfcol=c(2,2))
+acf(res11 , main="ACF For ARMA(1,1) Residuals")     
+pacf(res11, main="PACF For ARMA(1,1) Residuals")
+
+Box.test(res11,lag=10,type='Ljung')
+Box.test(res12,lag=10,type='Ljung')
+
+library("car")
+par(mfrow=c(2,1))
+qqPlot(res11,distribution="norm",main="Test residual normality - ARMA(1,1)")
+qqPlot(res12,distribution="norm",main="Test residual normality - ARMA(1,2)")
+
+library(tseries)
+jarque.bera.test(res11)
+```
+
+```{r}
+n_years <- 5
+future_forecast <- forecast(best_model, h = n_years)
+plot(future_forecast)
+
+point_forecasts <- future_forecast$mean
+lower_80 <- future_forecast$lower[, 1]
+upper_80 <- future_forecast$upper[, 1]
+lower_95 <- future_forecast$lower[, 2]
+upper_95 <- future_forecast$upper[, 2]
+```
+
+
+
+```{r}
+test <- ts(averages_by_year$avg_energy,start = 1963,frequency = 1)
+adf_test <- adfTest(test, lags = 3, type = "ct")
+adf_test
+```
+
+```{r}
+# First difference
+ts_energy_diff <- diff(test)
+
+# Perform ADF test on the differenced series
+adf_test_diff_energy <- adfTest(ts_energy_diff, lags = 3, type = "ct")
+adf_test_diff_energy
+```
+
+```{r}
+acf(ts_spotify_diff, lag.max = 10, main = "ACF of Differenced NBA Average Points per Game")
+pacf(ts_spotify_diff, lag.max = 10,main = "PACF of Differenced NBA Average Points per Game")
+```
+
+```{r}
+# Fit the best ARIMA model using auto.arima()
+arima_energy_model <- auto.arima(test, d =1)
+
+# Display the model
+summary(arima_energy_model)
+```
+
+```{r}
+fc <- forecast(arima_energy_model,h=5 ,level=0.95)
+
+ftb <- fc$mean
+low <- fc$lower
+up <- fc$upper
+
+mn <- min(c(ftb,low,up))
+mx <- max(c(ftb,low,up))
+
+plot(ts(ftb),ylim=c(mn,mx),ylab=" ",xlab=" ",main="h=500")
+lines(ts(low),col="blue",lty=4)
+lines(ts(up),col="blue",lty=4)
+```
+
+```{r}
+# Forecast the next five years
+energy_forecast <- forecast(arima_energy_model, h = 5)
+
+# Plot the forecast
+plot(energy_forecast)
+```
+
+```{r}
+res11 <- residuals(arima_energy_model)
+
+
+par(mfcol=c(2,2))
+acf(res11 , main="ACF For ARMA(1,1) Residuals")     
+pacf(res11, main="PACF For ARMA(1,1) Residuals")
+
+Box.test(res11,lag=10,type='Ljung')
+Box.test(res12,lag=10,type='Ljung')
+
+library("car")
+par(mfrow=c(2,1))
+qqPlot(res11,distribution="norm",main="Test residual normality - ARMA(1,1)")
+qqPlot(res12,distribution="norm",main="Test residual normality - ARMA(1,2)")
+
+library(tseries)
+jarque.bera.test(res11)
+
+```
+
