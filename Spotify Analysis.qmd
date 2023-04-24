@@ -1,0 +1,419 @@
+---
+title: "Spotify Analysis"
+author: "Andres Gonzalez"
+format: pdf
+editor: visual
+---
+
+```{r}
+library(patchwork)
+```
+
+```{r}
+# Adding font
+font_add_google(family = "montse", "Montserrat")
+
+showtext_opts(dpi = 300)
+showtext_auto()
+
+# logo
+add_logo <- function(plot_path, logo_path, logo_position, 
+                     logo_scale = 10){
+    # Requires magick R Package https://github.com/ropensci/magick
+    # Useful error message for logo position
+    if (!logo_position %in% c("top right", "top left", "bottom right", "bottom left")) {
+        stop("Error Message: Uh oh! Logo Position not recognized\n  Try: logo_positon = 'top left', 'top right', 'bottom left', or 'bottom right'")
+    }
+    # read in raw images
+    plot <- magick::image_read(plot_path)
+    logo_raw <- magick::image_read(logo_path)
+    # get dimensions of plot for scaling
+    plot_height <- magick::image_info(plot)$height
+    plot_width <- magick::image_info(plot)$width
+    # default scale to 1/10th width of plot
+    # Can change with logo_scale
+    logo <- magick::image_scale(logo_raw, as.character(plot_width/logo_scale))
+    # Get width of logo
+    logo_width <- magick::image_info(logo)$width
+    logo_height <- magick::image_info(logo)$height
+    # Set position of logo
+    # Position starts at 0,0 at top left
+    # Using 0.01 for 1% - aesthetic padding
+    if (logo_position == "top right") {
+        x_pos = plot_width - logo_width - 0.01 * plot_width
+        y_pos = 0.01 * plot_height
+    } else if (logo_position == "top left") {
+        x_pos = 0.01 * plot_width
+        y_pos = 0.01 * plot_height
+    } else if (logo_position == "bottom right") {
+        x_pos = plot_width - logo_width - 0.01 * plot_width
+        y_pos = plot_height - logo_height - 0.01 * plot_height
+    } else if (logo_position == "bottom left") {
+        x_pos = 0.01 * plot_width
+        y_pos = plot_height - logo_height - 0.01 * plot_height
+    }
+    # Compose the actual overlay
+    magick::image_composite(plot, logo, offset = paste0("+", x_pos, "+", y_pos))
+}
+```
+
+# Danceability
+
+```{r}
+# Create time series objects for the training and test sets
+ts_danceability <- ts(averages_by_year$avg_danceability, start = 1963, frequency = 1)
+
+adfTest(ts_danceability, lags = 3, type = "c")
+
+ts_danceability_diff <- diff(ts_danceability)
+
+adfTest(ts_danceability_diff, lags = 3, type = "c")
+
+# Find the best ARIMA model using auto.arima()
+best_model <- auto.arima(ts_danceability, d = 1)
+
+# Check residuals
+residuals_best_model <- residuals(best_model)
+par(mfcol = c(2, 2))
+acf(residuals_best_model, main = "ACF For Best Model Residuals")
+pacf(residuals_best_model, main = "PACF For Best Model Residuals")
+
+# Perform Ljung-Box test
+Box.test(residuals_best_model, lag = 10, type = 'Ljung')
+
+# Test residual normality
+par(mfrow = c(2, 1))
+qqPlot(residuals_best_model, distribution = "norm", main = "Test residual normality - Best Model")
+jarque.bera.test(residuals_best_model)
+
+# Forecast for the next 5 years
+future_forecast <- forecast(best_model, h = 5)
+plot(future_forecast, main = "Spotify Danceability Forecast (Next 5 Years)")
+
+point_forecasts <- future_forecast$mean
+lower_95 <- future_forecast$lower[, 2]
+upper_95 <- future_forecast$upper[, 2]
+```
+
+```{r}
+actual_data <- data.frame(
+  Year = as.numeric(time(ts_danceability)),
+  Danceability = as.numeric(ts_danceability),
+  Lower95 = NA,
+  Upper95 = NA,
+  Type = "Actual"
+)
+
+forecast_df <- data.frame(
+  Year = as.numeric(time(future_forecast$mean)),
+  Danceability = as.numeric(future_forecast$mean),
+  Lower95 = as.numeric(future_forecast$lower[, 2]),
+  Upper95 = as.numeric(future_forecast$upper[, 2]),
+  Type = "Forecast"
+)
+
+combined_data <- rbind(actual_data, forecast_df)
+
+danceability_forecast <- ggplot(combined_data, aes(x = Year, y = Danceability)) +
+  geom_line(aes(color = Type), size = 1.2) +
+  geom_ribbon(aes(ymin = Lower95, ymax = Upper95, fill = Type), alpha = 0.3, linetype = 0) +
+  scale_color_manual(values = c("Actual" = "#4b917d", "Forecast" = "#f037a5")) +
+  scale_fill_manual(values = c("Actual" = "transparent", "Forecast" = "#f037a5")) +
+  scale_x_continuous(breaks = seq(1960, 2030, by = 5)) +
+  labs(title = "Danceability",
+       x = "Year",
+       y = "Energy",
+       color = "Type",
+       fill = "Type") +
+  theme_minimal() +
+  theme(
+    text = element_text(family = "montse"),
+    plot.title = element_markdown(size = 18, face = "bold"),
+    plot.title.position = "plot",
+    axis.title = element_text(size = 14, face = "bold"),
+    axis.text = element_text(size = 12),
+    legend.title = element_text(size = 14, face = "bold"),
+    legend.text = element_text(size = 12),
+    legend.position = "top"
+  )
+```
+
+# Energy 
+
+```{r}
+# Create time series objects for the training and test sets
+ts_energy <- ts(averages_by_year$avg_energy, start = 1963, frequency = 1)
+```
+
+```{r}
+adfTest(ts_energy, lags = 3, type = "ct")
+
+ts_energy_diff <- diff(ts_energy)
+
+adfTest(ts_energy_diff, lags = 3, type = "ct")
+
+# Find the best ARIMA model using auto.arima()
+best_model <- auto.arima(ts_energy, d = 1)
+
+# Check residuals
+residuals_best_model <- residuals(best_model)
+par(mfcol = c(2, 2))
+acf(residuals_best_model, main = "ACF For Best Model Residuals")
+pacf(residuals_best_model, main = "PACF For Best Model Residuals")
+
+# Perform Ljung-Box test
+Box.test(residuals_best_model, lag = 10, type = 'Ljung')
+
+# Test residual normality
+par(mfrow = c(2, 1))
+qqPlot(residuals_best_model, distribution = "norm", main = "Test residual normality - Best Model")
+jarque.bera.test(residuals_best_model)
+
+# Forecast for the next 5 years
+future_forecast <- forecast(best_model, h = 5)
+plot(future_forecast, main = "Spotify Danceability Forecast (Next 5 Years)")
+
+point_forecasts <- future_forecast$mean
+lower_95 <- future_forecast$lower[, 2]
+upper_95 <- future_forecast$upper[, 2]
+```
+
+```{r}
+actual_data <- data.frame(
+  Year = as.numeric(time(ts_energy)),
+  Energy = as.numeric(ts_energy),
+  Lower95 = NA,
+  Upper95 = NA,
+  Type = "Actual"
+)
+
+forecast_df <- data.frame(
+  Year = as.numeric(time(future_forecast$mean)),
+  Energy = as.numeric(future_forecast$mean),
+  Lower95 = as.numeric(future_forecast$lower[, 2]),
+  Upper95 = as.numeric(future_forecast$upper[, 2]),
+  Type = "Forecast"
+)
+
+combined_data1 <- rbind(actual_data, forecast_df)
+
+energy_forecast <- ggplot(combined_data1, aes(x = Year, y = Energy)) +
+  geom_line(aes(color = Type), size = 1.2) +
+  geom_ribbon(aes(ymin = Lower95, ymax = Upper95, fill = Type), alpha = 0.3, linetype = 0) +
+  scale_color_manual(values = c("Actual" = "#4b917d", "Forecast" = "#f037a5")) +
+  scale_fill_manual(values = c("Actual" = "transparent", "Forecast" = "#f037a5")) +
+  scale_x_continuous(breaks = seq(1960, 2030, by = 5)) +
+  labs(title = "Energy",
+       x = "Year",
+       y = "Energy",
+       color = "Type",
+       fill = "Type") +
+  theme_minimal() +
+  theme(
+    text = element_text(family = "montse"),
+    plot.title = element_markdown(size = 18, face = "bold"),
+    plot.title.position = "plot",
+    axis.title = element_text(size = 14, face = "bold"),
+    axis.text = element_text(size = 12),
+    legend.title = element_text(size = 14, face = "bold"),
+    legend.text = element_text(size = 12),
+    legend.position = "top"
+  )
+
+```
+
+
+# Acousticness
+
+```{r}
+# Create time series objects for the training and test sets
+ts_acousticness <- ts(averages_by_year$avg_acousticness, start = 1963, frequency = 1)
+```
+
+```{r}
+adfTest(ts_acousticness, lags = 3, type = "ct")
+
+ts_acousticness_diff <- diff(ts_acousticness)
+
+adfTest(ts_acousticness_diff, lags = 3, type = "ct")
+
+# Find the best ARIMA model using auto.arima()
+best_model <- auto.arima(ts_acousticness, d = 1)
+
+# Check residuals
+residuals_best_model <- residuals(best_model)
+par(mfcol = c(2, 2))
+acf(residuals_best_model, main = "ACF For Best Model Residuals")
+pacf(residuals_best_model, main = "PACF For Best Model Residuals")
+
+# Perform Ljung-Box test
+Box.test(residuals_best_model, lag = 10, type = 'Ljung')
+
+# Test residual normality
+par(mfrow = c(2, 1))
+qqPlot(residuals_best_model, distribution = "norm", main = "Test residual normality - Best Model")
+jarque.bera.test(residuals_best_model)
+
+# Forecast for the next 5 years
+future_forecast <- forecast(best_model, h = 5)
+plot(future_forecast, main = "Spotify Danceability Forecast (Next 5 Years)")
+
+point_forecasts <- future_forecast$mean
+lower_95 <- future_forecast$lower[, 2]
+upper_95 <- future_forecast$upper[, 2]
+```
+
+```{r}
+actual_data <- data.frame(
+  Year = as.numeric(time(ts_acousticness)),
+  Acousticness = as.numeric(ts_acousticness),
+  Lower95 = NA,
+  Upper95 = NA,
+  Type = "Actual"
+)
+
+forecast_df <- data.frame(
+  Year = as.numeric(time(future_forecast$mean)),
+  Acousticness = as.numeric(future_forecast$mean),
+  Lower95 = as.numeric(future_forecast$lower[, 2]),
+  Upper95 = as.numeric(future_forecast$upper[, 2]),
+  Type = "Forecast"
+)
+
+combined_data2 <- rbind(actual_data, forecast_df)
+
+acousticness_forecast <- ggplot(combined_data2, aes(x = Year, y = Acousticness)) +
+  geom_line(aes(color = Type), size = 1.2) +
+  geom_ribbon(aes(ymin = Lower95, ymax = Upper95, fill = Type), alpha = 0.3, linetype = 0) +
+  scale_color_manual(values = c("Actual" = "#4b917d", "Forecast" = "#f037a5")) +
+  scale_fill_manual(values = c("Actual" = "transparent", "Forecast" = "#f037a5")) +
+  scale_x_continuous(breaks = seq(1960, 2030, by = 5)) +
+  labs(title = "Acousticness",
+       x = "Year",
+       y = "Acousticness",
+       color = "Type",
+       fill = "Type") +
+  theme_minimal() +
+  theme(
+    text = element_text(family = "montse"),
+    plot.title = element_markdown(size = 18, face = "bold"),
+    plot.title.position = "plot",
+    axis.title = element_text(size = 14, face = "bold"),
+    axis.text = element_text(size = 12),
+    legend.title = element_text(size = 14, face = "bold"),
+    legend.text = element_text(size = 12),
+    legend.position = "top"
+  )
+
+
+```
+
+
+# Instrulmentalness
+
+```{r}
+# Create time series objects for the training and test sets
+ts_instrumentalness <- ts(averages_by_year$avg_instrumentalness, start = 1963, frequency = 1)
+```
+
+```{r}
+adfTest(ts_instrumentalness, lags = 3, type = "ct")
+
+# Find the best ARIMA model using auto.arima()
+best_model <- auto.arima(ts_instrumentalness)
+
+# Check residuals
+residuals_best_model <- residuals(best_model)
+par(mfcol = c(2, 2))
+acf(residuals_best_model, main = "ACF For Best Model Residuals")
+pacf(residuals_best_model, main = "PACF For Best Model Residuals")
+
+# Perform Ljung-Box test
+Box.test(residuals_best_model, lag = 10, type = 'Ljung')
+
+# Test residual normality
+par(mfrow = c(2, 1))
+qqPlot(residuals_best_model, distribution = "norm", main = "Test residual normality - Best Model")
+jarque.bera.test(residuals_best_model)
+
+# Forecast for the next 5 years
+future_forecast <- forecast(best_model, h = 5)
+plot(future_forecast, main = "Spotify Instrumentalness Forecast (Next 5 Years)")
+
+point_forecasts <- future_forecast$mean
+lower_95 <- future_forecast$lower[, 2]
+upper_95 <- future_forecast$upper[, 2]
+```
+
+```{r}
+actual_data <- data.frame(
+  Year = as.numeric(time(ts_instrumentalness)),
+  Instrumentalness = as.numeric(ts_instrumentalness),
+  Lower95 = NA,
+  Upper95 = NA,
+  Type = "Actual"
+)
+
+forecast_df <- data.frame(
+  Year = as.numeric(time(future_forecast$mean)),
+  Instrumentalness = as.numeric(future_forecast$mean),
+  Lower95 = as.numeric(future_forecast$lower[, 2]),
+  Upper95 = as.numeric(future_forecast$upper[, 2]),
+  Type = "Forecast"
+)
+
+combined_data3 <- rbind(actual_data, forecast_df)
+
+instrumental_forecast <- ggplot(combined_data3, aes(x = Year, y = Instrumentalness)) +
+  geom_line(aes(color = Type), size = 1.2) +
+  geom_ribbon(aes(ymin = Lower95, ymax = Upper95, fill = Type), alpha = 0.3, linetype = 0) +
+  scale_color_manual(values = c("Actual" = "#4b917d", "Forecast" = "#f037a5")) +
+  scale_fill_manual(values = c("Actual" = "transparent", "Forecast" = "#f037a5")) +
+  scale_x_continuous(breaks = seq(1960, 2023, by = 5)) +
+  labs(title = "Instrumentalness",
+       x = "Year",
+       y = "Instrumentalness",
+       color = "Type",
+       fill = "Type") +
+  theme_minimal() +
+  theme(
+    text = element_text(family = "montse"),
+    plot.title = element_markdown(size = 18, face = "bold"),
+    plot.title.position = "plot",
+    axis.title = element_text(size = 14, face = "bold"),
+    axis.text = element_text(size = 12),
+    legend.title = element_text(size = 14, face = "bold"),
+    legend.text = element_text(size = 12),
+    legend.position = "top"
+  )
+
+```
+
+# Plotting Everyting
+
+```{r}
+spotify_features <- (danceability_forecast + energy_forecast) / (acousticness_forecast + instrumental_forecast) +
+  plot_annotation(
+    title = "<span style = 'color:#1ED760; font-size: 28pt;'>Spotify</span> Audio Features Forecasting (5 Years)",
+    caption = "Source: Spotify API",
+    theme = theme(
+      plot.title = element_markdown(family = "montse", size = 24, face = "bold")
+    )
+  )
+
+ggsave(plot = spotify_features,
+       filename = "spotify_features.png",
+       height = 10, width = 15,
+       bg = "white")
+
+plot_logo <- add_logo(
+  plot_path = here::here("spotify_features.png"),
+  logo_path = here::here("spotify-2-logo.png"),
+  logo_position = "top right",
+  logo_scale = 15)
+
+magick::image_write(image = plot_logo, 
+            here::here("spotify_features.png"))
+```
+
+

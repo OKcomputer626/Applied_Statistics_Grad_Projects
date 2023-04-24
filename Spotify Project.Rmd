@@ -13,8 +13,15 @@ knitr::opts_chunk$set(echo = TRUE)
 library(showtext)
 library(ggtext)
 library(forecast)
+library(purrr)
+library(tidyverse)
+library(spotifyr)
+library(fUnitRoots)
+library(car)
+library(tseries)
+library(reshape2)
+library(lmtest)
 ```
-
 
 ```{r}
 # Adding font
@@ -64,17 +71,11 @@ add_logo <- function(plot_path, logo_path, logo_position,
 }
 ```
 
-
-```{r}
-library(spotifyr)
-library(purrr)
-
-
-```
-
 ```{r}
 spotify <- read_csv("Datasets/spotify_songs.csv")
 ```
+
+
 
 ```{r}
 spotify_filtered <- spotify %>%
@@ -113,21 +114,19 @@ filtered_playlist <- filtered_playlist %>%
 combined_data <- bind_rows(spotify_filtered, filtered_playlist)
 
 combined_data <- combined_data %>%
-  mutate(track_name = ifelse(is.na(track_name), track.name, track_name)) %>%
-  select(-track.name)
+  mutate(track_name = ifelse(is.na(track_name), track.name, track_name),
+         track_popularity = ifelse(is.na(track_popularity), track.popularity, track_popularity)) %>%
+  select(-c(track.name, track.popularity))
 
 combined_data <- combined_data %>%
   distinct(track_name, .keep_all = TRUE)
 ```
 
 ```{r}
-write_csv(combined_data, "spotify data.csv")
-```
-
-```{r}
 averages_by_year <- combined_data %>%
   group_by(release_year) %>%
   summarise(
+    avg_popularity = mean(track_popularity, na.rm = TRUE),
     avg_danceability = mean(danceability, na.rm = TRUE),
     avg_energy = mean(energy, na.rm = TRUE),
     avg_key = mean(key, na.rm = TRUE),
@@ -138,13 +137,17 @@ averages_by_year <- combined_data %>%
     avg_instrumentalness = mean(instrumentalness, na.rm = TRUE),
     avg_liveness = mean(liveness, na.rm = TRUE),
     avg_valence = mean(valence, na.rm = TRUE),
-    avg_tempo = mean(tempo, na.rm = TRUE))
+    avg_tempo = mean(tempo, na.rm = TRUE)) %>%
+  ungroup()
 
 averages_by_year <- averages_by_year %>%
   filter(release_year >= 1963)
 
+write_csv(averages_by_year, "Spotify Averages by Year.csv")
+averages_by_year <- read_csv("Spotify Averages by Year.csv")
+
 group_audio <- averages_by_year %>%
-  pivot_longer(cols = avg_danceability:avg_tempo,
+  pivot_longer(cols = avg_popularity:avg_tempo,
                names_to = "audio_features",
                values_to = "count")
 
@@ -180,7 +183,7 @@ plot <- group_audio %>%
     plot.title.position = "plot",
     plot.caption = element_text(size = 10),
     legend.title = element_blank(),
-    legend.position = "top",,
+    legend.position = "top",
     legend.text = element_text(size = 12),
     axis.title = element_text(size = 16),
     axis.text = element_text(size = 14),
@@ -227,7 +230,7 @@ plot2 <- group_audio %>%
     plot.title.position = "plot",
     plot.caption = element_text(size = 10),
     legend.title = element_blank(),
-    legend.position = "top",,
+    legend.position = "top",
     legend.text = element_text(size = 12),
     axis.title = element_text(size = 16),
     axis.text = element_text(size = 14),
@@ -251,127 +254,51 @@ plot_logo
 ```
 
 ```{r}
-ts_spotify <- ts(averages_by_year$avg_danceability,start = 1963,frequency = 1)
-adfTest(ts_spotify, lags = 3, type = "ct")
+averages_by_year <- averages_by_year %>%
+  select(-c(avg_tempo,avg_loudness,avg_key))
 ```
 
 ```{r}
-ts_spotify_diff <- diff(ts_spotify)
+# Create a time series object for avg_popularity
+avg_popularity_ts <- ts(averages_by_year$avg_popularity, start = 1963, frequency = 1)
 
-adfTest(ts_spotify_diff, lags = 3, type = "ct")
+# Loop through the other features and perform Granger causality tests
+for (column_name in colnames(averages_by_year %>% select(-release_year, -avg_popularity))) {
+  column_ts <- ts(averages_by_year[[column_name]], start = 1963, frequency = 1)
+  granger_test <- grangertest(avg_popularity_ts ~ column_ts, order = 1)
+  cat("Granger causality test for", column_name, ":\n")
+  print(granger_test)
+  cat("\n")
+}
 ```
 
 ```{r}
-# Find the best ARIMA model using auto.arima()
-best_model <- auto.arima(ts_spotify, d = 1)
+# Select relevant columns
+spotify_features <- averages_by_year %>%
+  select(-release_year)
 
-# Display the best model
-summary(best_model)
-```
+# Calculate the correlation matrix
+cor_matrix <- cor(spotify_features)
 
-```{r}
-res11 <- residuals(best_model)
+# Melt the correlation matrix into a long format for ggplot2
+melted_cor_matrix <- melt(cor_matrix)
 
-
-par(mfcol=c(2,2))
-acf(res11 , main="ACF For ARMA(1,1) Residuals")     
-pacf(res11, main="PACF For ARMA(1,1) Residuals")
-
-Box.test(res11,lag=10,type='Ljung')
-Box.test(res12,lag=10,type='Ljung')
-
-library("car")
-par(mfrow=c(2,1))
-qqPlot(res11,distribution="norm",main="Test residual normality - ARMA(1,1)")
-qqPlot(res12,distribution="norm",main="Test residual normality - ARMA(1,2)")
-
-library(tseries)
-jarque.bera.test(res11)
-```
-
-```{r}
-n_years <- 5
-future_forecast <- forecast(best_model, h = n_years)
-plot(future_forecast)
-
-point_forecasts <- future_forecast$mean
-lower_80 <- future_forecast$lower[, 1]
-upper_80 <- future_forecast$upper[, 1]
-lower_95 <- future_forecast$lower[, 2]
-upper_95 <- future_forecast$upper[, 2]
-```
-
-
-
-```{r}
-test <- ts(averages_by_year$avg_energy,start = 1963,frequency = 1)
-adf_test <- adfTest(test, lags = 3, type = "ct")
-adf_test
-```
-
-```{r}
-# First difference
-ts_energy_diff <- diff(test)
-
-# Perform ADF test on the differenced series
-adf_test_diff_energy <- adfTest(ts_energy_diff, lags = 3, type = "ct")
-adf_test_diff_energy
-```
-
-```{r}
-acf(ts_spotify_diff, lag.max = 10, main = "ACF of Differenced NBA Average Points per Game")
-pacf(ts_spotify_diff, lag.max = 10,main = "PACF of Differenced NBA Average Points per Game")
-```
-
-```{r}
-# Fit the best ARIMA model using auto.arima()
-arima_energy_model <- auto.arima(test, d =1)
-
-# Display the model
-summary(arima_energy_model)
-```
-
-```{r}
-fc <- forecast(arima_energy_model,h=5 ,level=0.95)
-
-ftb <- fc$mean
-low <- fc$lower
-up <- fc$upper
-
-mn <- min(c(ftb,low,up))
-mx <- max(c(ftb,low,up))
-
-plot(ts(ftb),ylim=c(mn,mx),ylab=" ",xlab=" ",main="h=500")
-lines(ts(low),col="blue",lty=4)
-lines(ts(up),col="blue",lty=4)
-```
-
-```{r}
-# Forecast the next five years
-energy_forecast <- forecast(arima_energy_model, h = 5)
-
-# Plot the forecast
-plot(energy_forecast)
-```
-
-```{r}
-res11 <- residuals(arima_energy_model)
-
-
-par(mfcol=c(2,2))
-acf(res11 , main="ACF For ARMA(1,1) Residuals")     
-pacf(res11, main="PACF For ARMA(1,1) Residuals")
-
-Box.test(res11,lag=10,type='Ljung')
-Box.test(res12,lag=10,type='Ljung')
-
-library("car")
-par(mfrow=c(2,1))
-qqPlot(res11,distribution="norm",main="Test residual normality - ARMA(1,1)")
-qqPlot(res12,distribution="norm",main="Test residual normality - ARMA(1,2)")
-
-library(tseries)
-jarque.bera.test(res11)
+# Create the heatmap using ggplot2
+ggplot(data = melted_cor_matrix, aes(x = Var1, y = Var2, fill = value)) +
+  geom_tile(color = "white") +
+  scale_fill_gradient2(low = "steelblue", high = "darkred", mid = "white", midpoint = 0, limit = c(-1, 1), name = "Correlation") +
+  theme_minimal() + 
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, size = 12, hjust = 1, face = "bold"),
+        axis.text.y = element_text(size = 12, face = "bold"),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.border = element_blank(),
+        panel.background = element_blank()) +
+  geom_text(aes(label = round(value, 2)), size = 4, color = "black") +
+  coord_fixed()
 
 ```
+
 
