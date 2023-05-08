@@ -1,0 +1,524 @@
+---
+title: STAT 590 Survival Analysis - Final Project
+subtitle: A clinical Trial in the Treatment of Carcinoma of the Oropharynx
+author: 
+- name: Andres Gonzalez
+- name: Yushan Zhao
+date: today
+date-format: long
+bibliography: references.bib
+format: 
+  titlepage-pdf:
+    documentclass: scrbook
+    classoption: ["oneside", "open=any"]
+    number-sections: true
+    toc: true
+    titlepage: formal 
+    titlepage-logo: "img/CSU-Longbeach_seal.svg.png"
+    titlepage-footer: |
+      California State University - Long Beach\
+      Departement of Mathematics and Statistics\
+      1250 Bellflower Boulevard\
+      Long Beach, California 90840\
+    titlepage-theme:
+      elements: ["\\titleblock", "\\authorblock", "\\vfill", "\\dateblock \\vspace{0.8cm}","\\logoblock", "\\footerblock"]
+      page-align: "center"
+      title-style: "plain"
+      title-fontstyle: ["Huge", "textbf"]
+      title-space-after: "1.5cm"
+      subtitle-fontstyle: "LARGE"
+      title-subtitle-space-between: "0.5cm"
+      author-style: "plain"
+      author-sep: "newline"
+      author-fontstyle: "textbf"
+      author-space-after: "2\\baselineskip"
+      affiliation-style: "numbered-list-with-correspondence"
+      affiliation-fontstyle: "large"
+      affiliation-space-after: "0pt"
+      footer-style: "plain"
+      footer-fontstyle: ["Large", "textsc"]
+      footer-space-after: "0pt"
+      logo-size: "0.4\\textwidth"
+      logo-space-after: "1cm"
+    keep-tex: true
+---
+
+```{r}
+#| label: load libraries
+#| include: false
+
+library(tidyverse)
+library(readxl)
+library(showtext)
+library(paletteer)
+library(patchwork)
+library(ggbeeswarm)
+library(ggsurvfit)
+```
+
+```{r}
+#| label: fonts
+#| include: false
+
+font_add_google(family = "montse", "Montserrat")
+
+showtext_opts(dpi = 300)
+showtext_auto()
+```
+
+```{r}
+#| label: load dataset
+#| include: false
+
+pharynx <- read_excel("pharynx.xls")
+```
+
+```{r}
+#| label: recode gender
+#| include: false
+
+pharynx <- pharynx %>%
+  mutate(Sex = ifelse(Sex == 1,"Male","Female")) 
+```
+
+# Exploratory Data Analysis
+
+## Age
+
+```{r}
+#| label: Age histogram
+#| echo: false
+
+pharynx %>%
+  ggplot(aes(x = Age)) +
+  geom_histogram(binwidth = 5, fill = "#658CBD", color = "#AAC5E1") +
+  scale_x_continuous(breaks = seq(0,100, by = 5)) +
+  labs(
+    title = "Age Distribution",
+    y = "",
+    caption = "Source: Clinical Trial in the Treatment of Carcinoma of the Oropharynx Dataset"
+  ) +
+  theme_minimal() +
+  theme(
+    text = element_text(family = "montse"),
+    plot.title = element_text(size = 12, face = "bold"),
+    plot.title.position = "plot",
+    plot.caption = element_text(face = "italic"),
+    axis.title = element_text(face = "bold"),
+    legend.position = "top",
+    panel.grid.major = element_blank()
+  )
+```
+
+```{r}
+#| echo: false
+
+pharynx <- pharynx %>%
+  mutate(Cond = replace(Cond, Cond == 0, 9))
+
+pharynx %>%
+  mutate(
+    Grade = factor(Grade),
+    Grade = recode(Grade, "1" = "Well Differentiated", "2" = "Moderately Differentiated", "3" = "Poorly Differentiated","9" = "Missing")) %>%
+  ggplot(aes(x = fct_rev(Grade), y = Age, color = Grade)) +
+  geom_quasirandom() +
+  scale_color_paletteer_d("ggthemes::Nuriel_Stone") +
+  labs(
+    title = "Age Distribution by Grade Differentiation",
+    caption = "Source: Clinical Trial in the Treatment of Carcinoma of the Oropharynx Dataset",
+    x = "Grade"
+  ) +
+  coord_flip() +
+  theme_minimal() +
+  theme(
+    text = element_text(family = "montse"),
+    plot.title = element_text(size = 12, face = "bold", margin = margin(b = 15)),
+    plot.title.position = "plot",
+    plot.caption = element_text(face = "italic"),
+    axis.title = element_text(face = "bold"),
+    legend.position = c(0.2, 1),
+    legend.direction = "horizontal",
+    legend.text = element_text(size = 7),
+    legend.title = element_blank(),
+    panel.grid.major = element_blank()
+  )
+```
+
+```{r}
+#| echo: false
+
+pharynx %>%
+  mutate(
+    Cond = factor(Cond),
+    Cond = recode(Cond, "1" = "No Disability", "2" = "Restricted Work", "3" = "Requires Assistance With Self Care","4" = "Bed Confinded", "9" = "Missing")) %>%
+  ggplot(aes(x = fct_rev(Cond), y = Age, color = Cond)) +
+  geom_quasirandom(size = 1.2) +
+  scale_color_paletteer_d("ggthemes::Nuriel_Stone") +
+  labs(
+    title = "Age Distribution by Condition",
+    caption = "Source: Clinical Trial in the Treatment of Carcinoma of the Oropharynx Dataset",
+    x = "Condition"
+  ) +
+  coord_flip() +
+  theme_minimal() +
+  theme(
+    text = element_text(family = "montse"),
+    plot.title = element_text(size = 12, face = "bold", margin = margin(b = 15)),
+    plot.title.position = "plot",
+    plot.caption = element_text(face = "italic"),
+    axis.title = element_text(face = "bold"),
+    legend.position = c(0.1, 1),
+    legend.direction = "horizontal",
+    legend.text = element_text(size = 5.5),
+    legend.title = element_blank(),
+    panel.grid.major = element_blank()
+  )
+```
+
+```{r}
+#| echo: false
+
+pharynx %>%
+  mutate(
+    Site = factor(Site),
+    Site = recode(Site, "1" = "Faucial Arch", "2" = "Tonsillar Fossa", "3" = "Posterior Pillar","4" = "Pharyngeal Tongue", "5" = "Posterior Wall")) %>%
+  ggplot(aes(x = fct_rev(Site), y = Age, color = Site)) +
+  geom_quasirandom(size = 1.4) +
+  scale_color_paletteer_d("ggthemes::Nuriel_Stone") +
+  labs(
+    title = "Age Distribution by Site",
+    caption = "Source: Clinical Trial in the Treatment of Carcinoma of the Oropharynx Dataset",
+    x = "Condition"
+  ) +
+  coord_flip() +
+  theme_minimal() +
+  theme(
+    text = element_text(family = "montse"),
+    plot.title = element_text(size = 12, face = "bold", margin = margin(b = 15)),
+    plot.title.position = "plot",
+    plot.caption = element_text(face = "italic"),
+    axis.title = element_text(face = "bold"),
+    legend.position = c(0.1, 1),
+    legend.direction = "horizontal",
+    legend.text = element_text(size = 7),
+    legend.title = element_blank(),
+    panel.grid.major = element_blank()
+  )
+```
+
+```{r}
+#| echo: false
+
+pharynx %>%
+  mutate(
+    T_Stage = factor(T_Stage),
+    T_Stage = recode(T_Stage, "1" = "2cm or less", "2" = "2cm to 4cm", "3" = "More than 4cm","4" = "Massive Invasive Tumor")) %>%
+  ggplot(aes(x = fct_rev(T_Stage), y = Age, color = T_Stage)) +
+  geom_quasirandom(size = 1.4) +
+  scale_color_paletteer_d("ggthemes::Nuriel_Stone") +
+  labs(
+    title = "Age Distribution by T_Stage",
+    caption = "Source: Clinical Trial in the Treatment of Carcinoma of the Oropharynx Dataset",
+    x = "Condition"
+  ) +
+  coord_flip() +
+  theme_minimal() +
+  theme(
+    text = element_text(family = "montse"),
+    plot.title = element_text(size = 12, face = "bold", margin = margin(b = 15)),
+    plot.title.position = "plot",
+    plot.caption = element_text(face = "italic"),
+    axis.title = element_text(face = "bold"),
+    legend.position = c(0.1, 1),
+    legend.direction = "horizontal",
+    legend.text = element_text(size = 7),
+    legend.title = element_blank(),
+    panel.grid.major = element_blank()
+  )
+```
+
+```{r}
+#| echo: false
+
+pharynx %>%
+  mutate(
+    N_Stage = factor(N_Stage),
+    N_Stage = recode(N_Stage, "0" = "No Clinical Evidence", "1" = "3cm or less", "2" = "More than 3cm","3" = "Multiple Positive Nodes")) %>%
+  ggplot(aes(x = fct_rev(N_Stage), y = Age, color = N_Stage)) +
+  geom_quasirandom(size = 1.4) +
+  scale_color_paletteer_d("ggthemes::Nuriel_Stone") +
+  labs(
+    title = "Age Distribution by T_Stage",
+    caption = "Source: Clinical Trial in the Treatment of Carcinoma of the Oropharynx Dataset",
+    x = "Condition"
+  ) +
+  coord_flip() +
+  theme_minimal() +
+  theme(
+    text = element_text(family = "montse"),
+    plot.title = element_text(size = 12, face = "bold", margin = margin(b = 15)),
+    plot.title.position = "plot",
+    plot.caption = element_text(face = "italic"),
+    axis.title = element_text(face = "bold"),
+    legend.position = c(0.2, 1),
+    legend.direction = "horizontal",
+    legend.text = element_text(size = 7),
+    legend.title = element_blank(),
+    panel.grid.major = element_blank()
+  )
+```
+
+
+## Gender
+
+```{r}
+#| label: gender plot
+#| echo: false
+
+pharynx_gender <- pharynx %>%
+  group_by(Sex) %>%
+  summarise(count = n())
+
+plot_1 <- pharynx_gender %>%
+  ggplot(aes(x = Sex, y = count, fill = Sex, label = count)) +
+  geom_bar(stat = "identity") +
+  geom_text(position = position_nudge(y = 5), size = 3, family = "montse", fontface = "bold") +
+  scale_fill_manual(values = c("#B83377","#2EA9D8")) +
+  labs(
+    title = "Distribution of Gender",
+    x = "Gender",
+    y = "Value"
+  ) +
+  theme_minimal() +
+  theme(
+    text = element_text(family = "montse"),
+    plot.title = element_text(size = 12, face = "bold"),
+    plot.title.position = "plot",
+    plot.caption = element_text(face = "italic"),
+    axis.title = element_text(face = "bold"),
+    legend.position = "top",
+    legend.title = element_blank()
+  )
+```
+
+```{r}
+#| label: Gender and Age plot
+#| echo: false
+
+plot_2 <- pharynx %>%
+  ggplot(aes(x = Sex, y = Age, fill = Sex)) +
+  geom_boxplot() +
+  scale_fill_manual(values = c("#B83377","#2EA9D8")) +
+  labs(
+    title = "Age Distribution by Gender",
+    x = "Gender"
+  ) +
+  theme_minimal() +
+  theme(
+    text = element_text(family = "montse"),
+    plot.title = element_text(size = 12, face = "bold"),
+    plot.title.position = "plot",
+    plot.caption = element_text(face = "italic"),
+    axis.title = element_text(face = "bold"),
+    legend.position = "top",
+    legend.title = element_blank()
+  )
+```
+
+```{r}
+#| label: Combine plots for age and gender
+#| echo: false
+
+(plot_1 + plot_2) +
+  plot_annotation(
+    caption = "Source: Clinical Trial in the Treatment of Carcinoma of the Oropharynx Dataset"
+  ) &
+  theme(
+    text = element_text(family = "montse"),
+    plot.caption = element_text(face = "italic")
+  )
+```
+
+
+```{r}
+#| include: false
+
+pharynx_condition <- pharynx %>%
+  group_by(Sex, Cond) %>%
+  summarise(count = n()) %>%
+  filter(!Cond %in% 0) %>%
+  mutate(Cond = recode(Cond, "1" = "No Disability", "2" = "Restricted Work", "3" = "Requires Assistance with Self Care", "4" = "Bed Confined", "9" = "Missing")) %>%
+  ungroup() 
+```
+
+
+```{r}
+#| label: Age and Condition plot
+#| echo: false
+
+pharynx_condition %>%
+  ggplot(aes(x = Sex, y = count, fill = Sex, label = count)) +
+  geom_bar(position = "dodge", stat = "identity") +
+  geom_text(position = position_dodge(width = .9), vjust = -0.5, size = 3, family = "montse", fontface = "bold") +
+  scale_fill_manual(values = c("#B83377", "#2EA9D8")) +
+  scale_y_continuous(limits = c(0,130),
+                     breaks = seq(0,120, by = 30)) +
+  labs(
+    title = "Condition",
+    subtitle = "195 Participants",
+    x = "Gender",
+    y = "Value",
+    caption = "Source: Clinical Trial in the Treatment of Carcinoma of the Oropharynx Dataset"
+  ) +
+  facet_wrap(~Cond) +
+  theme_minimal() +
+  theme(
+    text = element_text(family = "montse"),
+    plot.title = element_text(face = "bold", size = 12),
+    plot.title.position = "plot",
+    plot.subtitle = element_text(size = 10),
+    plot.caption = element_text(face = "italic"),
+    axis.title = element_text(face = "bold"),
+    strip.text = element_text(size = 6.5),
+    legend.position = "none",
+    panel.grid.major = element_blank()
+  )
+```
+
+```{r}
+#| include: false
+
+pharynx_grade <- pharynx %>%
+  group_by(Sex, Grade) %>%
+  summarise(value = n()) %>%
+  mutate(
+    Grade = factor(Grade),
+    Grade = recode(Grade, "1" = "Well Differentiated", "2" = "Moderately Differentiated", "3" = "Poorly Differentiated","9" = "Missing")) %>%
+  ungroup()
+```
+
+
+```{r}
+#| label: barplot of Grade vs Age by Gender
+#| echo: false
+
+pharynx_grade %>%
+  ggplot(aes(x = fct_rev(Grade), y = value, fill = Sex, label = value)) +
+  geom_bar(position = "stack", stat = "identity") +
+  geom_text(position = position_stack(vjust = 0.5), size = 3, family = "montse", fontface = "bold") +
+  scale_fill_manual(values = c("#B83377", "#2EA9D8")) +
+  labs(
+    title = "Stacked Distribution of Grades by Gender",
+    subtitle = "195 Participants",
+    x = "Grade",
+    y = "Value",
+    caption = "Source: Clinical Trial in the Treatment of Carcinoma of the Oropharynx Dataset"
+  ) +
+  coord_flip() +
+  theme_minimal() +
+  theme(
+    text = element_text(family = "montse"),
+    plot.title = element_text(size = 12, face = "bold"),
+    plot.title.position = "plot",
+    plot.caption = element_text(face = "italic"),
+    axis.title = element_text(face = "bold"),
+    legend.position = "top",
+    legend.title = element_blank()
+  )
+```
+## Time and Status 
+
+```{r}
+#| echo: false
+
+pharynx %>%
+  mutate(Status = as_factor(Status)) %>%
+  ggplot(aes(x = Time, y = Age, color = Status, shape = Status)) +
+  geom_point(size = 2.5) +
+  scale_shape_manual(values = c(1,4), 
+                     labels = c("Censored","Dead")) +
+  scale_color_manual(values = c("#090c9b","#880808"),
+                     labels = c("Censored","Dead")) +
+  labs(
+    title = "Scatter Plot of Time and Age by Status",
+    caption = "Source: Clinical Trial in the Treatment of Carcinoma of the Oropharynx Dataset"
+  ) +
+  theme_minimal() +
+  theme(
+    text = element_text(family = "montse"),
+    plot.title = element_text(size = 12, face = "bold"),
+    plot.title.position = "plot",
+    plot.caption = element_text(face = "italic"),
+    axis.title = element_text(face = "bold"),
+    legend.position = "top",
+    legend.title = element_blank()
+  )
+```
+
+## Kaplan Meier 
+
+```{r}
+
+pharynx <- pharynx %>%
+  mutate(
+    Status = as.numeric(Status),
+    TX = as_factor(Tx),
+    SEX = as_factor(Sex),
+    T_STAGE = as_factor(T_Stage)
+  )
+
+pharynx_surv <- Surv(pharynx$Time, pharynx$Status)
+
+# Fit a Kaplan-Meier curve, stratified by treatment
+pharynx_km_tx <- survfit2(pharynx_surv ~ TX, data = pharynx)
+
+# Plot the Kaplan-Meier curve, stratified by treatment
+ggsurvfit(pharynx_km_tx, linewidth = 1) +
+  add_confidence_interval() +
+  add_censor_mark() +
+  add_pvalue(location = "annotation") +
+  labs(y = "Percentage Survival",
+       title = "Kaplan-Meier Survival Curve by Treatment") +
+  scale_y_continuous(label = scales::percent,
+                     breaks = seq(0,1, by = 0.2),
+                     expand = c(0.015,0)) +
+  scale_color_manual(values = c("#FC766AFF", "#5b84B1FF"),
+                     labels = c("Standard","Test")) +
+  scale_fill_manual(values = c("#FC766AFF", "#5b84B1FF"),
+                    labels = c("Standard","Test")) +
+  theme(
+    text = element_text(family = "montse"),
+    title = element_text(face = "bold"),
+    plot.title.position = "plot",
+    legend.position = "top"
+  )
+
+```
+
+```{r}
+pharynx_surv <- Surv(pharynx$Time, pharynx$Status)
+
+# Fit a Kaplan-Meier curve, stratified by treatment
+pharynx_km_tx <- survfit2(pharynx_surv ~ Sex, data = pharynx)
+
+# Plot the Kaplan-Meier curve, stratified by treatment
+ggsurvfit(pharynx_km_tx, linewidth = 1) +
+  add_confidence_interval() +
+  add_censor_mark() +
+  add_pvalue(location = "annotation") +
+  labs(y = "Percentage Survival",
+       title = "Kaplan-Meier Survival Curve by Treatment") +
+  scale_y_continuous(label = scales::percent,
+                     breaks = seq(0,1, by = 0.2),
+                     expand = c(0.015,0)) +
+  scale_color_manual(values = c("#B83377", "#2EA9D8")) +
+  scale_fill_manual(values = c("#B83377", "#2EA9D8")) +
+  theme(
+    text = element_text(family = "montse"),
+    title = element_text(face = "bold"),
+    plot.title.position = "plot",
+    legend.position = "top"
+  )
+
+```
+
