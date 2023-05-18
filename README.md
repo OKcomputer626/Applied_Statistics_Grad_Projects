@@ -62,8 +62,11 @@ Project for Regression Analysis (CSULB: STAT 510)
 * Testing 
 * Prediction
 
-## [Clinical Trial in the Treatment of Carcinoma of the Oropharynx]
-(https://github.com/OKcomputer626/Applied_Statistics_Grad_Projects/tree/main/Pharynx%20Clinical%20Trial)
+---
+
+# Spring 2023
+
+## [Clinical Trial in the Treatment of Carcinoma of the Oropharynx](https://github.com/OKcomputer626/Applied_Statistics_Grad_Projects/tree/main/Pharynx%20Clinical%20Trial)
 
 Project for Survival Analysis (CSULB: STAT 590)
 
@@ -79,5 +82,3 @@ Project for Survival Analysis (CSULB: STAT 590)
 * Kaplan-Meier Estimator Curve
 * Log-Rank Test
 * Proportional Hazard Assumption Check
-
----
