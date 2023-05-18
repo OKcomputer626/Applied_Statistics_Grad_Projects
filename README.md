@@ -62,4 +62,22 @@ Project for Regression Analysis (CSULB: STAT 510)
 * Testing 
 * Prediction
 
+## [Clinical Trial in the Treatment of Carcinoma of the Oropharynx]
+(https://github.com/OKcomputer626/Applied_Statistics_Grad_Projects/tree/main/Pharynx%20Clinical%20Trial)
+
+Project for Survival Analysis (CSULB: STAT 590)
+
+### Data
+
+* [Pharynx Dataset](https://github.com/OKcomputer626/Applied_Statistics_Grad_Projects/blob/main/Pharynx%20Clinical%20Trial/pharynx.xls) from Dr. Zhou
+
+### Statistical Methodology
+
+* Exploratory Data Analysis (EDA)
+* Cox Proportional Hazard Model
+* Variable Selection
+* Kaplan-Meier Estimator Curve
+* Log-Rank Test
+* Proportional Hazard Assumption Check
+
 ---
