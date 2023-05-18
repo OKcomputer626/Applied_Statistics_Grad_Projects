@@ -1,0 +1,717 @@
+---
+title: "STAT 590 Survival Analysis - Final Project"
+subtitle: A clinical Trial in the Treatment of Carcinoma of the Oropharynx
+author: 
+- name: Andres Gonzalez
+- name: Yushan Zhao
+date: today
+date-format: long
+bibliography: references.bib
+format: 
+  titlepage-pdf:
+    documentclass: scrreprt
+    classoption: ["oneside", "open=any"]
+    number-sections: true
+    toc: true
+    titlepage: formal 
+    titlepage-logo: "img/CSU-Longbeach_seal.svg.png"
+    titlepage-footer: |
+      California State University - Long Beach\
+      Departement of Mathematics and Statistics\
+      1250 Bellflower Boulevard\
+      Long Beach, California 90840\
+    titlepage-theme:
+      elements: ["\\titleblock", "\\authorblock", "\\vfill", "\\dateblock \\vspace{0.8cm}","\\logoblock", "\\footerblock"]
+      page-align: "center"
+      title-style: "plain"
+      title-fontstyle: ["Huge", "textbf"]
+      title-space-after: "1.5cm"
+      subtitle-fontstyle: "LARGE"
+      title-subtitle-space-between: "0.5cm"
+      author-style: "plain"
+      author-sep: "newline"
+      author-fontstyle: "textbf"
+      author-space-after: "2\\baselineskip"
+      affiliation-style: "numbered-list-with-correspondence"
+      affiliation-fontstyle: "large"
+      affiliation-space-after: "0pt"
+      footer-style: "plain"
+      footer-fontstyle: ["Large", "textsc"]
+      footer-space-after: "0pt"
+      logo-size: "0.4\\textwidth"
+      logo-space-after: "1cm"
+    keep-tex: true
+---
+
+# Abstract
+
+This is a report of 195 patients with squamous carcinoma of 15 sites in the mouth and throat, with 16 participating institutions, though only data on three sites in the oropharynx reported by the six largest institutions are considered here. Patients entering the study were randomly assigned to one of two treatment groups, radiation therapy alone or radiation therapy together with a chemotherapeutic agent. Stepwise regression was used to build up the model, and a cox regression proportional hazard model was adopted to analyze the significance of different variables. Dependent variable is survival time, and independent variables include T staging, N Staging, Sex, Age, Grade, General Condition, and Treatment. After the stepwise regression, only T staging, N Staging, Grade, General Condition, and Treatment are added to the final model. One goal of the study was to compare the two treatment policies with respect to patient survival. After controlling for T Staging, N Staging, Grade, and General Condition, results indicated that treatment does not play a significant role in patients' survival time.
+
+# Introduction
+
+Pharynx cancer is a significant health challenge, impacting countless individuals globally. Survival analysis focuses on examining the time interval between a participant's entry into a study and the occurrence of a subsequent event. Treatment differences play a vital role in influencing survival rates and enhancing patients' quality of life. This study endeavors to perform a comprehensive survival analysis on pharynx cancer patients, contrasting the effectiveness of combined treatment approaches with traditional radiation therapy. Additionally, the interconnections between various patient and tumor attributes (covariates) and survival rates will be investigated to gain a deeper understanding of their influence on treatment outcomes.
+
+Furthermore, 30% of the survival periods in this study are censored, primarily due to patients still being alive at the time of analysis. A limited number of patients were lost to follow-up as a result of moving or switching to institutions not involved in the study, although these cases were relatively uncommon. Even with the implementation of specific eligibility criteria to eliminate patients with severe disease progression, a substantial degree of heterogeneity persists among the study participants, leaving numerous factors unaccounted for.
+
+This study encompasses seven critical covariates believed to influence survival outcomes, comprising sex, T staging, N staging, age, general condition, grade and treatment. In the TX Treatment variable, 1 represents the standard treatment, while 2 indicates the test treatment. The T and N staging classification system quantifies the tumor's size at the primary site and involvement of regional lymph nodes, while the general condition variable estimates the patient's functional ability at diagnosis. T=1 denotes a small primary tumor with a diameter of 2 centimeters or less, while T=4 signifies a massive tumor extending into adjacent tissues. T=2 and T=3 represent intermediate cases. N=0 implies no clinical evidence of lymph node metastasis, and N=1, N=2, N=3 designate increasing degrees of lymph node involvement. Patients classified as T=1, N=0; T=1, N=1; T=2, N=0; or T=2, N=1, as well as those with distant metastases, were excluded from the study.
+
+Beyond the primary focus on the comparative effectiveness of combined treatment versus traditional radiation therapy, it is essential to pinpoint the covariates that have the most considerable impact or exhibit the most robust correlation with survival results. In this context, conducting an exploratory analysis proves valuable for gaining deeper insights into the variables and recognizing underlying patterns into the study which addresses in the following section.
+
+```{r}
+#| label: load libraries
+#| include: false
+
+library(tidyverse)
+library(readxl)
+library(showtext)
+library(paletteer)
+library(patchwork)
+library(ggbeeswarm)
+library(ggsurvfit)
+library(survival)
+library(survminer)
+library(gtsummary)
+library(gt)
+```
+
+```{r}
+#| label: fonts
+#| include: false
+
+font_add_google(family = "montse", "Montserrat")
+
+showtext_opts(dpi = 300)
+showtext_auto()
+```
+
+```{r}
+#| label: load dataset
+#| include: false
+
+pharynx <- read_excel("pharynx.xls")
+```
+
+```{r}
+#| label: recode gender
+#| include: false
+
+pharynx <- pharynx %>%
+  mutate(Sex = ifelse(Sex == 1,"Male","Female"),
+         Cond = replace(Cond, Cond == 0, 9))
+```
+
+# Exploratory Data Analysis
+
+## Age
+
+```{r}
+#| label: Age histogram
+#| echo: false
+#| fig-width: 7
+#| fig-height: 4
+
+pharynx %>%
+  ggplot(aes(x = Age)) +
+  geom_histogram(binwidth = 5, fill = "#658CBD", color = "#AAC5E1") +
+  scale_x_continuous(breaks = seq(0,100, by = 5)) +
+  labs(
+    title = "Age Distribution",
+    y = "",
+    caption = "Source: Clinical Trial in the Treatment of Carcinoma of the Oropharynx Dataset"
+  ) +
+  theme_minimal() +
+  theme(
+    text = element_text(family = "montse"),
+    plot.title = element_text(size = 12, face = "bold"),
+    plot.title.position = "plot",
+    plot.caption = element_text(face = "italic"),
+    axis.title = element_text(face = "bold"),
+    legend.position = "top",
+    panel.grid.major = element_blank()
+  )
+```
+
+The age histogram exhibits a normal distribution, with a potential outlier at age 20. The age range covers individuals from their twenties up to their nineties, and the mean age is 60.4.
+
+```{r}
+#| include: false
+
+h1 <- pharynx %>%
+  mutate(
+    Grade = factor(Grade),
+    Grade = recode(Grade, "1" = "Well Differentiated", "2" = "Moderately Differentiated", "3" = "Poorly Differentiated","9" = "Missing")) %>%
+  ggplot(aes(x = fct_rev(Grade), y = Age, color = Grade)) +
+  geom_quasirandom() +
+  scale_color_paletteer_d("ggthemes::Nuriel_Stone") +
+  labs(
+    title = "Age Distribution by Grade Differentiation",
+    x = "Grade"
+  ) +
+  coord_flip() +
+  theme_minimal() +
+  theme(
+    text = element_text(family = "montse"),
+    plot.title = element_text(size = 12, face = "bold", margin = margin(b = 15)),
+    plot.title.position = "plot",
+    plot.caption = element_text(face = "italic"),
+    axis.title = element_text(face = "bold"),
+    legend.position = c(0.2, 1),
+    legend.direction = "horizontal",
+    legend.text = element_text(size = 7),
+    legend.title = element_blank(),
+    panel.grid.major = element_blank()
+  )
+```
+
+```{r}
+#| include: false
+
+h2 <- pharynx %>%
+  mutate(
+    Cond = factor(Cond),
+    Cond = recode(Cond, "1" = "No Disability", "2" = "Restricted Work", "3" = "Requires Assistance With Self Care","4" = "Bed Confinded", "9" = "Missing")) %>%
+  ggplot(aes(x = fct_rev(Cond), y = Age, color = Cond)) +
+  geom_quasirandom(size = 1.2) +
+  scale_color_paletteer_d("ggthemes::Nuriel_Stone") +
+  labs(
+    title = "Age Distribution by Condition",
+    x = "Condition"
+  ) +
+  coord_flip() +
+  theme_minimal() +
+  theme(
+    text = element_text(family = "montse"),
+    plot.title = element_text(size = 12, face = "bold", margin = margin(b = 15)),
+    plot.title.position = "plot",
+    plot.caption = element_text(face = "italic"),
+    axis.title = element_text(face = "bold"),
+    legend.position = c(0.1, 1),
+    legend.direction = "horizontal",
+    legend.text = element_text(size = 5.5),
+    legend.title = element_blank(),
+    panel.grid.major = element_blank()
+  )
+```
+
+```{r}
+#| include: false
+
+h3 <- pharynx %>%
+  mutate(
+    Site = factor(Site),
+    Site = recode(Site, "1" = "Faucial Arch", "2" = "Tonsillar Fossa", "3" = "Posterior Pillar","4" = "Pharyngeal Tongue", "5" = "Posterior Wall")) %>%
+  ggplot(aes(x = fct_rev(Site), y = Age, color = Site)) +
+  geom_quasirandom(size = 1.4) +
+  scale_color_paletteer_d("ggthemes::Nuriel_Stone") +
+  labs(
+    title = "Age Distribution by Site",
+    x = "Condition"
+  ) +
+  coord_flip() +
+  theme_minimal() +
+  theme(
+    text = element_text(family = "montse"),
+    plot.title = element_text(size = 12, face = "bold", margin = margin(b = 15)),
+    plot.title.position = "plot",
+    plot.caption = element_text(face = "italic"),
+    axis.title = element_text(face = "bold"),
+    legend.position = c(0.1, 1),
+    legend.direction = "horizontal",
+    legend.text = element_text(size = 7),
+    legend.title = element_blank(),
+    panel.grid.major = element_blank()
+  )
+```
+
+```{r}
+#| include: false
+
+h4 <- pharynx %>%
+  mutate(
+    T_Stage = factor(T_Stage),
+    T_Stage = recode(T_Stage, "1" = "2cm or less", "2" = "2cm to 4cm", "3" = "More than 4cm","4" = "Massive Invasive Tumor")) %>%
+  ggplot(aes(x = fct_rev(T_Stage), y = Age, color = T_Stage)) +
+  geom_quasirandom(size = 1.4) +
+  scale_color_paletteer_d("ggthemes::Nuriel_Stone") +
+  labs(
+    title = "Age Distribution by T Staging",
+    x = "Condition"
+  ) +
+  coord_flip() +
+  theme_minimal() +
+  theme(
+    text = element_text(family = "montse"),
+    plot.title = element_text(size = 12, face = "bold", margin = margin(b = 15)),
+    plot.title.position = "plot",
+    plot.caption = element_text(face = "italic"),
+    axis.title = element_text(face = "bold"),
+    legend.position = c(0.1, 1),
+    legend.direction = "horizontal",
+    legend.text = element_text(size = 7),
+    legend.title = element_blank(),
+    panel.grid.major = element_blank()
+  )
+```
+
+```{r}
+#| include: false
+
+h5 <- pharynx %>%
+  mutate(
+    N_Stage = factor(N_Stage),
+    N_Stage = recode(N_Stage, "0" = "No Clinical Evidence", "1" = "3cm or less", "2" = "More than 3cm","3" = "Multiple Positive Nodes")) %>%
+  ggplot(aes(x = fct_rev(N_Stage), y = Age, color = N_Stage)) +
+  geom_quasirandom(size = 1.4) +
+  scale_color_paletteer_d("ggthemes::Nuriel_Stone") +
+  labs(
+    title = "Age Distribution by N Staging",
+    x = "Condition"
+  ) +
+  coord_flip() +
+  theme_minimal() +
+  theme(
+    text = element_text(family = "montse"),
+    plot.title = element_text(size = 12, face = "bold", margin = margin(b = 15)),
+    plot.title.position = "plot",
+    plot.caption = element_text(face = "italic"),
+    axis.title = element_text(face = "bold"),
+    legend.position = c(0.2, 1),
+    legend.direction = "horizontal",
+    legend.text = element_text(size = 7),
+    legend.title = element_blank(),
+    panel.grid.major = element_blank()
+  )
+```
+
+```{r}
+#| echo: false
+#| fig-width: 11
+#| fig-height: 10
+
+h6 <- (h1 + h2) / (h3 + h4) / (h5)
+h6 + plot_annotation(
+    caption = "Source: Clinical Trial in the Treatment of Carcinoma of the Oropharynx Dataset"
+  )
+```
+
+Upon examining the plots, distinct patterns in age distributions are observed. The grade differentiation plot reveals a higher prevalence of moderately differentiated individuals compared to other grades. The condition plot indicates that most individuals belong to the "no disability" category. The site distribution presents a balanced ratio among faucial arch, tonsillar fossa, and pharyngeal tongue. The T staging plot displays an even distribution for "more than 4cm" and "massive invasive tumor" classifications within the 40-80 age range. Lastly, the N staging plot exhibits an equitable distribution across all classifications.
+
+## Gender
+
+```{r}
+#| label: gender plot
+#| echo: false
+
+pharynx_gender <- pharynx %>%
+  group_by(Sex) %>%
+  summarise(count = n())
+
+plot_1 <- pharynx_gender %>%
+  ggplot(aes(x = Sex, y = count, fill = Sex, label = count)) +
+  geom_bar(stat = "identity") +
+  geom_text(position = position_nudge(y = 5), size = 3, family = "montse", fontface = "bold") +
+  scale_fill_manual(values = c("#B83377","#2EA9D8")) +
+  labs(
+    title = "Distribution of Gender",
+    x = "Gender",
+    y = "Value"
+  ) +
+  theme_minimal() +
+  theme(
+    text = element_text(family = "montse"),
+    plot.title = element_text(size = 12, face = "bold"),
+    plot.title.position = "plot",
+    plot.caption = element_text(face = "italic"),
+    axis.title = element_text(face = "bold"),
+    legend.position = "top",
+    legend.title = element_blank()
+  )
+```
+
+```{r}
+#| label: Gender and Age plot
+#| echo: false
+
+plot_2 <- pharynx %>%
+  ggplot(aes(x = Sex, y = Age, fill = Sex)) +
+  geom_boxplot() +
+  scale_fill_manual(values = c("#B83377","#2EA9D8")) +
+  labs(
+    title = "Age Distribution by Gender",
+    x = "Gender"
+  ) +
+  theme_minimal() +
+  theme(
+    text = element_text(family = "montse"),
+    plot.title = element_text(size = 12, face = "bold"),
+    plot.title.position = "plot",
+    plot.caption = element_text(face = "italic"),
+    axis.title = element_text(face = "bold"),
+    legend.position = "top",
+    legend.title = element_blank()
+  )
+```
+
+```{r}
+#| label: Combine plots for age and gender
+#| echo: false
+
+(plot_1 + plot_2) +
+  plot_annotation(
+    caption = "Source: Clinical Trial in the Treatment of Carcinoma of the Oropharynx Dataset"
+  ) &
+  theme(
+    text = element_text(family = "montse"),
+    plot.caption = element_text(face = "italic")
+  )
+```
+
+The distribution of gender reveals a higher count of males compared to females, with 149 males and 46 females. In the age distribution of gender, both genders display a relatively even distribution, with the exception of a single outlier in their 20s, as mentioned previously.
+
+```{r}
+#| include: false
+
+pharynx_grade <- pharynx %>%
+  group_by(Sex, Grade) %>%
+  summarise(value = n()) %>%
+  mutate(
+    Grade = factor(Grade),
+    Grade = recode(Grade, "1" = "Well Differentiated", "2" = "Moderately Differentiated", "3" = "Poorly Differentiated","9" = "Missing")) %>%
+  ungroup()
+```
+
+## Time and Status
+
+```{r}
+#| echo: false
+
+pharynx %>%
+  mutate(Status = as_factor(Status)) %>%
+  ggplot(aes(x = Time, y = Age, color = Status, shape = Status)) +
+  geom_point(size = 2.5) +
+  scale_shape_manual(values = c(1,4), 
+                     labels = c("Censored","Dead")) +
+  scale_color_manual(values = c("#090c9b","#880808"),
+                     labels = c("Censored","Dead")) +
+  labs(
+    title = "Scatter Plot of Time and Age by Status",
+    caption = "Source: Clinical Trial in the Treatment of Carcinoma of the Oropharynx Dataset"
+  ) +
+  theme_minimal() +
+  theme(
+    text = element_text(family = "montse"),
+    plot.title = element_text(size = 12, face = "bold"),
+    plot.title.position = "plot",
+    plot.caption = element_text(face = "italic"),
+    axis.title = element_text(face = "bold"),
+    legend.position = "top",
+    legend.title = element_blank()
+  )
+```
+
+The plot above suggests that, regardless of age, individuals who experience an event tend to have a shorter time to event, with only a few reaching over 1000 days. In contrast, those who are censored generally exhibit a longer duration before being censored.
+
+# Methods
+
+Stepwise selection, utilizing the likelihood ratio test as a statistic, was employed to develop the model, while the Cox regression proportional hazard model was used for the analysis of this dataset.
+
+# Results
+
+## Model Selection
+
+```{r}
+#| echo: false
+
+model_table <- data.frame(
+  Variables = c("None",
+                "Sex",
+                "T Staging",
+                "N Staging",
+                "Age",
+                "General Condition",
+                "Grade",
+                "Treatment",
+                "N Staging + Age + General Condition + Grade + Treatment",
+                "T Staging + Age + General Condition + Grade + Treatment",
+                "T Staging + N Staging + General Condition + Grade + Treatment",
+                "T Staging + N Staging + Age + Grade + Treatment",
+                "T Staging + N Staging + Age + General Condition + Treatment",
+                "T Staging + N Staging + Age + General Condition + Grade",
+                "T Staging + N Staging + Age + General Condition + Grade + Treatment",
+                "T Staging + N Staging + General Condition + Grade + Treatment + Sex"),
+  
+  Minus2LogL = c(1324.34,
+                 1323.64,
+                 1316.46,
+                 1321.20,
+                 1323.89,
+                 1314.33,
+                 1324.05,
+                 1323.41,
+                 1307.94,
+                 1306.35,
+                 1300.99,
+                 1309.31,
+                 1302.07,
+                 1301.92,
+                 1301.95,
+                 1299.90))
+
+
+colnames(model_table)[2] <- "$-2log \\hat{L}$"
+
+knitr::kable(model_table, caption = "Model Comparison Based on -2 Log-Likelihood",escape = FALSE)
+```
+
+Stepwise regression is employed to develop the Cox regression proportional hazard model. This approach constructs a series of Cox regression models, incorporating or excluding specific variables based on their impact on the -2log likelihood rate. Decisions are made by determining if the variable significantly reduces the -2log likelihood rate.
+
+The statistical method used for the hypothesis test for the reduced model and the full model is the Likelihood Ratio test (LRT). In the first step, each variable is added to the model one at a time, and then those models with separate variables are compared with models with null variables. From Table 1, it can be seen that, when compared with the null model, the model with T staging, N staging, Age, General Condition, Grade, and Treatment (but not Sex) has a significant reduction in -2log likelihood rate. Thus, Sex is excluded from the model at step 1.
+
+Afterward, a model with those significant variables (let's say n variables here) from the previous step is compared and contrasted with models with n-1 variables. In this step, variables are included in the final model if they contribute the most to the reduction in -2log likelihood rate. For example, comparing the model with N Staging, General Condition, Grade, Age, and Treatment to the model with T Staging, N Staging, Age, General Condition, Grade, and Treatment, there is a significant decrease in -2log likelihood rate from 1307.94 to 1300.96, with a 6.96 drop. This indicates that the variable T Staging is important and adds a lot of information to the model, so it cannot be removed.
+
+At step 3, the variables indicating non-significance at step 1 are added back to the model. Thus, Sex is added to the model. The model with T Staging, N Staging, General Condition, Grade, and Treatment is compared with the model with T Staging, N Staging, General Condition, Grade, and Sex. The result shows that adding Sex to the model doesn't add information to explain variation in the model. Consequently, it is decided not to include Sex in the model. The process ends when the final model is identified. The final model includes: T Staging, N Staging, General Condition, Grade, and Treatment.
+
+![AIC Values for Selected Models](Model%20Comparison%20AIC.png)
+
+Also, the AIC comparison indicates that the model with five predictors (T Staging, N Staging, General Condition, Grade, and Treatment) is the best fit among the three, as it has the lowest AIC value. The small differences in AIC values suggest that the full model containing age or adding Sex to the reduced model does not significantly improve the model fit, making the first model the most parsimonious choice.
+
+![Summary of the Cox Regression Proportional Hazard Model](Patient%20variables.png)
+
+The final model is:
+
+$$
+\lambda(t, x_1, x_2, x_3, x_4, x_5) = \lambda_0(t) \times e^{0.296x_1 + 0.170x_2 + 0.221x_3 - 0.122x_4 + 0.168x_5}
+$$
+
+where
+
+$x_1$ = T Staging (1 if 2 cm or less, 2 if 2 cm to 4 cm, 3 if more than 4 cm, and 4 if massive invasive tumor)
+
+$x_2$ = N Staging (0 if no clinical evidence of node metastases, 1 if single positive node 3 cm or less in diameter, not fixed, 2 if single positive node more than 3 cm in diameter, not fixed, and 3 if multiple positive nodes or fixed positive nodes)
+
+$x_3$ = General Condition (1 if no disability, 2 if restricted work, 3 if requires assistance with self care, 4 if bed confined, and 9 if missing)
+
+$x_4$ = Grade (1 if well differentiated, 2 if moderately differentiated, 3 if poorly differentiated, 9 if missing)
+
+$x_5$ = Treatment (1 if standard, 2 if test)
+
+```{r}
+#| include: false
+
+# Create a survival object
+surv_obj <- Surv(pharynx$Time, pharynx$Status)
+
+# Fit univariate models for each covariate
+model_sex <- coxph(surv_obj ~ Sex, data = pharynx)
+model_Tstage <- coxph(surv_obj ~ T_Stage, data = pharynx)
+model_Nstage <- coxph(surv_obj ~ N_Stage, data = pharynx)
+model_age <- coxph(surv_obj ~ Age, data = pharynx)
+model_condition <- coxph(surv_obj ~ Cond, data = pharynx)
+model_grade <- coxph(surv_obj ~ Grade, data = pharynx)
+model_tx <- coxph(surv_obj ~ Tx, data = pharynx)
+
+# Fit the null model
+model_null <- coxph(surv_obj ~ 1, data = pharynx)
+
+# Compare models using likelihood ratio test
+anova(model_null, model_sex, model_Tstage, model_Nstage, model_age, model_condition, model_grade, model_tx)
+
+# Fit the multivariate Cox model with the significant variables
+multivariate_model <- coxph(surv_obj ~ T_Stage + N_Stage + Age + Cond + Grade + Tx, data = pharynx)
+
+# Fit reduced models without each variable
+model_no_Tstage <- coxph(surv_obj ~ N_Stage + Age + Cond + Grade + Tx, data = pharynx)
+model_no_Nstage <- coxph(surv_obj ~ T_Stage + Age + Cond + Grade + Tx, data = pharynx)
+model_no_age <- coxph(surv_obj ~ T_Stage + N_Stage + Cond + Grade + Tx, data = pharynx)
+model_no_cond <- coxph(surv_obj ~ T_Stage + N_Stage + Age + Grade + Tx, data = pharynx)
+model_no_grade <- coxph(surv_obj ~ T_Stage + N_Stage + Age + Cond + Tx, data = pharynx)
+model_no_tx <- coxph(surv_obj ~ T_Stage + N_Stage + Age + Cond + Grade, data = pharynx)
+
+# Compare the reduced models with the full model using likelihood ratio tests
+anova(multivariate_model, model_no_Tstage, model_no_Nstage, model_no_age, model_no_cond, model_no_grade, model_no_tx)
+
+# Fit the extended model with the "Sex" variable
+extended_model_no_age <- coxph(surv_obj ~ T_Stage + N_Stage + Cond + Grade + Tx + Sex, data = pharynx)
+
+# Compare the extended model with the model_no_age
+anova(model_no_age, extended_model_no_age)
+
+anova(model_no_age,multivariate_model)
+
+# Get the -2logL for the null model
+-2 * logLik(model_null)
+
+# Get the -2logL for each univariate model
+-2 * logLik(model_sex)
+-2 * logLik(model_Tstage)
+-2 * logLik(model_Nstage)
+-2 * logLik(model_age)
+-2 * logLik(model_condition)
+-2 * logLik(model_grade)
+-2 * logLik(model_tx)
+-2 * logLik(model_no_Tstage)
+-2 * logLik(model_no_Nstage)
+-2 * logLik(model_no_age)
+-2 * logLik(model_no_cond)
+-2 * logLik(model_no_grade)
+-2 * logLik(model_no_tx)
+-2 * logLik(multivariate_model)
+-2 * logLik(extended_model_no_age)
+
+model_no_age$coefficients
+```
+
+## PH Assumption Check
+
+Before finalizing the model, it is highly necessary to check the PH assumption to ensure that it is appropriate to apply Cox regression PH model for this data set.
+
+![Schoenfeld Individual Test for Each Variable](images/ggcoxzph-01.png)
+
+Observing the above plots, it is evident that the solid lines provide good fits to these plots. More specifically, the dashed lines indicate positive or negative 2 standard errors enclosed by the fit lines. These plots imply no obvious concerns and patterns as time passes by. This means that the PH assumption is satisfied, making it appropriate to use the Cox regression PH model for data analysis.
+
+The log-log survival curve for each variable is also run, as shown below. These curves are overall parallel, which indicates that the PH assumption is satisfied as well.
+
+```{r}
+#| echo: false
+
+km_T_stage <- survfit(Surv(Time, Status) ~ T_Stage, data = pharynx)
+km_N_stage <- survfit(Surv(Time, Status) ~ N_Stage, data = pharynx)
+km_Cond <- survfit(Surv(Time, Status) ~ Cond, data = pharynx)
+km_Grade <- survfit(Surv(Time, Status) ~ Grade, data = pharynx)
+km_Tx <- survfit(Surv(Time, Status) ~ Tx, data = pharynx)
+
+# T stage
+ggsurvplot(km_T_stage, fun = "cloglog") +
+  labs(title = "Log-Log Kaplan-Meier Survival Estimates for T Stage",
+       x = "Time",
+       y = "Log-Log Survival Probability")
+
+# N stage
+ggsurvplot(km_N_stage, fun = "cloglog") +
+  labs(title = "Log-Log Kaplan-Meier Survival Estimates for N Stage",
+       x = "Time",
+       y = "Log-Log Survival Probability")
+
+# General Condition
+ggsurvplot(km_Cond, fun = "cloglog") +
+  labs(title = "Log-Log Kaplan-Meier Survival Estimates for General Condition",
+       x = "Time",
+       y = "Log-Log Survival Probability")
+
+# Grade
+ggsurvplot(km_Grade, fun = "cloglog") +
+  labs(title = "Log-Log Kaplan-Meier Survival Estimates for Grade",
+       x = "Time",
+       y = "Log-Log Survival Probability")
+
+# Treatment
+ggsurvplot(km_Tx, fun = "cloglog") +
+  labs(title = "Log-Log Kaplan-Meier Survival Estimates for Treatment",
+       x = "Time",
+       y = "Log-Log Survival Probability")
+
+```
+
+## Kaplan Meier Survival Curve For Treatment
+
+```{r}
+#| label: Kaplan Meier estimate curve for Treatment
+#| echo: false
+
+pharynx_surv <- Surv(pharynx$Time, pharynx$Status)
+
+# Fit a Kaplan-Meier curve, stratified by treatment
+pharynx_km_tx <- survfit2(pharynx_surv ~ Tx, data = pharynx)
+
+# Plot the Kaplan-Meier curve, stratified by treatment
+ggsurvfit(pharynx_km_tx, linewidth = 1) +
+  add_confidence_interval() +
+  add_censor_mark() +
+  add_pvalue(location = "annotation") +
+  labs(y = "Percentage Survival",
+       title = "Kaplan-Meier Survival Curve by Treatment") +
+  scale_y_continuous(label = scales::percent,
+                     breaks = seq(0,1, by = 0.2),
+                     expand = c(0.015,0)) +
+  scale_color_manual(values = c("#FC766AFF", "#5b84B1FF"),
+                     labels = c("Standard","Test")) +
+  scale_fill_manual(values = c("#FC766AFF", "#5b84B1FF"),
+                    labels = c("Standard","Test")) +
+  theme(
+    text = element_text(family = "montse"),
+    title = element_text(face = "bold"),
+    plot.title.position = "plot",
+    legend.position = "top"
+  )
+```
+
+From the Kaplan-Meier curve plot, it becomes evident that there is no significant difference in treatment outcomes, as both lines overlap and remain quite similar. Furthermore, after 1000 days, the survival rate plateaus at a relatively low level of 20%.
+
+## Research Questions
+
+Find the hazard ratio for an individual on a particular treatment relative to another individual on a different treatment with the same T staging, same N staging, same General Condition, and same Grade. Also construct a 95% confidence interval.
+
+The difference in the log-hazard function for the two groups can be written as:
+
+$$
+\begin{aligned}
+\log \lambda(t, x_1, x_2=1, x_3=1, x_4=1, x_5=2) - \log \lambda(t, x_1, x_2=1, x_3=1, x_4=1, x_5=1) 
+\end{aligned}
+$$
+
+we get
+
+$$
+\begin{aligned}
+& (\log \lambda_0(t) + \beta_1 + \beta_2 + \beta_3 + \beta_4 + 2 \beta_5) \\
+& - (\log \lambda_0(t) + \beta_1 + \beta_2 + \beta_3 + \beta_4 + \beta_5) \\
+&= \beta_5 \\
+&= 0.16746
+\end{aligned}
+$$
+
+The point estimate for the hazard ratio (HR) is:
+
+$$
+\hat{\text{HR}} = e^{0.16746} = 1.18
+$$
+
+This suggests that the hazard rate for patients who received the testing treatment is 16.7% of the patients who received the standard treatment.
+
+The confidence interval for the hazard ratio is:
+
+$$
+e^{0.16746 \pm 1.96 (0.17119)} = (e^{-0.1681}, e^{0.50299}) = (0.8453, 1.6537)
+$$
+
+The confidence interval suggests that the hazard ratio is as low as 0.8453 and as high as 1.6537 at $\alpha = 0.05$. The confidence interval of the hazard ratio includes 1, which means that the treatment effect is not significant.
+
+```{r}
+#| include: false
+
+tbl_survfit_ex2 <- tbl_survfit(
+  pharynx,
+  y = Surv(Time, Status),
+  include = c(T_Stage, N_Stage, Cond, Grade, Tx),
+  probs = 0.5,
+  label_header = "**Median Survival (95% CI)**",
+  label = c(T_Stage ~ "T staging", N_Stage ~ "N staging", Cond ~ "General Condition", Tx ~ "Treatment")) %>%
+  modify_header(label = "**Variable**") %>%
+  as_gt() %>%
+  tab_header(
+    title = md("**Median Survival for Key Variables**")
+  ) %>%
+  tab_source_note(md("*Pharynx Dataset*")) %>%
+  opt_table_font(
+    font = google_font("Montserrat")
+  ) %>%
+  gtExtras::gtsave_extra(filename = "Patient Pharynx Variables Median.png")
+```
+
+![Median Survival at 95% Confidence Interval](Patient%20Pharynx%20Variables%20Median.png){fig-align="left"}
+
+The median survival times on figure 5.4 vary across independent variables. Patients with smaller T staging tumors and a single positive node have longer survival times. Those without disabilities and with poorly differentiated tumors also fare better. Patients receiving radiation therapy alone tend to survive longer than those receiving combined treatments.
+
+# Conclusion
+
+The objective of this report is to examine and compare the treatment effects between two treatments: radiation therapy alone and radiation therapy combined with a chemotherapeutic agent. The results suggest that these treatments do not significantly impact the survival rate of patients with pharynx cancer. Other factors, such as family history of pharynx cancer or eating habits, might play a more significant role in determining the survival rate of these patients. Nevertheless, acknowledging the model's limitations and the data used in the analysis is essential. Pursuing further research and validation with larger datasets can help improve the model's accuracy and applicability in a wider context.
