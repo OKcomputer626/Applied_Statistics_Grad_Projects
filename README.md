@@ -45,7 +45,6 @@ Project for Introduction to R (CSULB: STAT 471)
 * Testing 
 * Prediction
 
-
 ## [Linear Regression of Life Expectancy](https://github.com/OKcomputer626/Applied_Statistics_Grad_Projects/tree/main/Life%20Expectancy)
 
 Project for Regression Analysis (CSULB: STAT 510)
