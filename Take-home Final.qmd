@@ -1,0 +1,584 @@
+---
+title: "STAT 550 Multivariate Statistical Analysis"
+subtitle: Take-home Final
+author: 
+- name: Andres Gonzalez
+date: today
+date-format: long
+bibliography: references.bib
+format: 
+  titlepage-pdf:
+    documentclass: scrreprt
+    classoption: ["oneside", "open=any"]
+    titlepage: formal 
+    titlepage-logo: "img/CSU-Longbeach_seal.svg.png"
+    titlepage-footer: |
+      California State University - Long Beach\
+      Departement of Mathematics and Statistics\
+      1250 Bellflower Boulevard\
+      Long Beach, California 90840\
+    titlepage-theme:
+      elements: ["\\titleblock", "\\authorblock", "\\vfill", "\\dateblock \\vspace{0.8cm}","\\logoblock", "\\footerblock"]
+      page-align: "center"
+      title-style: "plain"
+      title-fontstyle: ["Huge", "textbf"]
+      title-space-after: "1.5cm"
+      subtitle-fontstyle: "LARGE"
+      title-subtitle-space-between: "0.5cm"
+      author-style: "plain"
+      author-sep: "newline"
+      author-fontstyle: "textbf"
+      author-space-after: "2\\baselineskip"
+      affiliation-style: "numbered-list-with-correspondence"
+      affiliation-fontstyle: "large"
+      affiliation-space-after: "0pt"
+      footer-style: "plain"
+      footer-fontstyle: ["Large", "textsc"]
+      footer-space-after: "0pt"
+      logo-size: "0.4\\textwidth"
+      logo-space-after: "1cm"
+    keep-tex: true
+---
+
+```{r include = FALSE}
+# load libraries
+library(tidyverse)
+library(factoextra)
+library(kableExtra)
+library(showtext)
+library(patchwork)
+library(psych)
+```
+
+```{r echo = FALSE}
+# Adding font
+font_add_google(family = "Roboto", "Roboto Condensed")
+
+showtext_auto()
+showtext_opts(dpi = 300)
+
+# Theme set
+theme_cool <- theme_bw(base_family = "Roboto") +
+  theme(
+    legend.position = "top",
+    legend.title = element_text(size = 12),
+    legend.text = element_text(size = 12),
+    plot.title = element_text(size = 18, face = "bold"),
+    plot.title.position = "plot",
+    plot.subtitle = element_text(size = 12, face = "italic", margin = margin(b = 12)),
+    plot.caption = element_text(size = 10),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    axis.text = element_text(size = 12),
+    axis.title = element_text(size = 12, face = "bold"),
+    panel.border = element_blank()
+  )
+
+theme_set(theme_cool)
+```
+
+## Part I
+
+### Introduction
+
+This report examines the National Track Records for Women and Men, a topic covered in Chapter 8 of "Applied Multivariate Statistical Analysis" by Johnson and Wichern. These records, which show how fast athletes run different distances, are usually given in time – seconds for short races and minutes for longer ones like marathons. Our goal is to convert these times into a single, easy-to-understand measure: speed in meters per second. This makes it simpler to compare performances across all events and between women and men.
+
+We've made the conversion process from time to speed straightforward and present our findings in a way that's easy to follow. By turning time records into speeds, we provide a new way to look at these athletic achievements, making them more relatable and interesting for everyone.
+
+### Methodology
+
+In this analysis, we transformed the track event times from the National Track Records into a standardized speed metric, measured in meters per second. For shorter events (up to 400m), the original times, recorded in seconds, were directly used in the calculation. However, for longer distances (800m to the marathon), where times were noted in minutes, we first converted these into seconds by multiplying by 60. This conversion ensured uniformity in our calculations, allowing us to accurately compare performances across all events. Applying the formula Speed = Distance / Time, we then calculated the speeds for each event, providing a clear, consistent basis for comparison between the various distances and between women’s and men’s records.
+
+### Questions
+
+(a) For each data, cluster the countries using both hierarchical (Single linkage and Complete linkage) and nonhierarchical (K-means) methods. Use the Euclidean distances as measures of (dis)similarity. Carefully characterize each resulted cluster. Compare the results from two data sets.
+
+(b) Using your choice of data set (either Men or Women) perform Canonical Discrimination Analysis for
+the clusters (groups) found in (a). Carefully interpret the canonical variables and give a complete DA using the canonical variables. Plot the observations in the space of the canonical variable(s) and label the points according to the cluster to which they were assigned.
+
+### Cluster Analysis
+
+Firstly, we focus on clustering the countries in our dataset, applying both hierarchical (Single linkage and Complete linkage) and non-hierarchical (K-means) methods. By utilizing Euclidean distances as a measure of similarity, we aim to group countries based on their track records, characterizing the unique attributes of each cluster. This approach allows us to draw comparisons between the clusters formed in the two datasets (Men and Women), offering insights into patterns and similarities across genders.
+
+```{r echo = FALSE}
+# women data frame
+women <- tibble(
+  `100m` = c(11.61, 11.20, 11.43, 11.41, 11.46, 11.31, 12.14, 11.00, 12.00, 11.95, 11.60, 12.90, 11.96, 11.09, 11.42, 11.79, 11.13, 11.15, 10.81, 11.01, 11.00, 11.79, 11.84, 11.45, 11.95, 11.85, 11.43, 11.45, 11.29, 11.73, 11.73, 11.96, 12.25, 12.03, 12.23, 11.76, 11.89, 11.25, 11.55, 11.58, 12.25, 11.76, 11.13, 11.81, 11.44, 12.30, 11.80, 11.16, 11.45, 11.22, 11.75, 11.98, 10.79, 11.06, 12.74),
+  `200m` = c(22.94, 22.35, 23.09, 23.04, 23.05, 23.17, 24.47, 22.25, 24.52, 24.41, 24.00, 27.10, 24.60, 21.97, 23.52, 24.05, 22.39, 22.59, 21.71, 22.39, 22.13, 24.08, 24.54, 23.06, 24.28, 24.24, 23.51, 23.57, 23.00, 24.00, 23.88, 24.49, 25.78, 24.96, 24.21, 25.08, 23.62, 22.81, 23.13, 23.31, 25.07, 23.54, 22.21, 24.22, 23.46, 25.00, 23.98, 22.82, 23.31, 22.62, 24.46, 24.44, 21.83, 22.19, 25.85),
+  `400m` = c(54.50, 51.08, 50.62, 52.00, 53.30, 52.80, 55.00, 50.06, 54.90, 54.97, 53.26, 60.40, 58.25, 47.99, 53.60, 56.05, 50.14, 51.73, 48.16, 49.75, 50.46, 54.93, 56.09, 51.50, 53.60, 55.34, 53.24, 54.90, 52.01, 53.73, 52.70, 55.70, 51.20, 56.10, 55.09, 58.10, 53.76, 52.38, 51.60, 53.12, 56.96, 54.60, 49.29, 54.30, 51.20, 55.08, 53.59, 51.79, 53.11, 52.50, 55.80, 56.45, 50.62, 49.19, 58.73),
+  `800m` = c(2.15, 1.98, 1.99, 2.00, 2.16, 2.10, 2.18, 2.00, 2.05, 2.08, 2.11, 2.30, 2.21, 1.89, 2.03, 2.24, 2.03, 2.00, 1.93, 1.95, 1.98, 2.07, 2.28, 2.01, 2.10, 2.22, 2.05, 2.10, 1.96, 2.09, 2.00, 2.15, 1.97, 2.07, 2.19, 2.27, 2.04, 1.99, 2.02, 2.03, 2.24, 2.19, 1.95, 2.09, 1.92, 2.12, 2.05, 2.02, 2.02, 2.10, 2.20, 2.15, 1.96, 1.89, 2.33),
+  `1500m` = c(4.43, 4.13, 4.22, 4.14, 4.58, 4.49, 4.45, 4.06, 4.23, 4.33, 4.35, 4.84, 4.68, 4.14, 4.18, 4.74, 4.10, 4.14, 3.96, 4.03, 4.03, 4.35, 4.86, 4.14, 4.32, 4.61, 4.11, 4.25, 3.98, 4.35, 4.15, 4.42, 4.25, 4.38, 4.69, 4.79, 4.25, 4.06, 4.18, 4.01, 4.84, 4.60, 3.99, 4.16, 3.96, 4.52, 4.14, 4.12, 4.07, 4.38, 4.72, 4.37, 3.95, 3.87, 5.81),
+  `3000m` = c(9.79, 9.08, 9.34, 8.88, 9.81, 9.77, 9.51, 8.81, 9.37, 9.31, 9.46, 11.10, 10.43, 8.92, 8.71, 9.89, 8.92, 8.98, 8.75, 8.59, 8.62, 9.87, 10.54, 8.98, 9.98, 10.02, 8.89, 9.37, 8.63, 9.20, 9.20, 9.62, 9.35, 9.64, 10.46, 10.90, 9.59, 9.01, 8.76, 8.53, 10.69, 10.16, 8.97, 8.84, 8.53, 9.94, 9.02, 8.84, 8.77, 9.63, 10.28, 9.38, 8.50, 8.45, 13.04),
+  Marathon = c(178.52, 152.37, 159.37, 157.85, 169.98, 168.75, 191.02, 149.45, 171.38, 168.48, 165.42, 233.22, 171.80, 158.85, 151.75, 203.88, 154.23, 155.27, 157.68, 148.53, 149.72, 182.20, 215.08, 156.37, 188.03, 201.28, 149.38, 160.48, 151.82, 150.50, 181.05, 164.65, 179.17, 174.68, 182.17, 261.13, 158.53, 152.48, 145.48, 145.48, 233.00, 200.37, 160.82, 151.20, 165.45, 182.77, 162.60, 154.48, 153.42, 177.87, 168.45, 201.08, 142.72, 151.22, 306.00),
+  Country = c("Argentina", "Australia", "Austria", "Belgium", "Bermuda", 
+                "Brazil", "Burma", "Canada", "Chile", "China", 
+                "Columbia", "Cook Islands", "Costa Rica", "Czech Republic", 
+                "Denmark", "Dominican Republic", "Finland", "France", 
+                "GDR", "FRG", "GBNI", "Greece", "Guatemala", "Hungary", 
+                "India", "Indonesia", "Ireland", "Israel", "Italy", 
+                "Japan", "Kenya", "Korea", "DPR Korea", "Luxembourg", 
+                "Malaysia", "Mauritius", "Mexico", "Netherlands", 
+                "New Zealand", "Norway", "PNG", "Philippines", "Poland", 
+                "Portugal", "Romania", "Singapore", "Spain", "Sweden", 
+                "Switzerland", "Taipei", "Thailand", "Turkey", "USA", 
+                "USSR", "Western Samoa"))
+
+# men data frame
+men <- tibble(
+  `100m` = c(10.39, 10.31, 10.44, 10.34, 10.28, 10.22, 10.64, 10.17, 10.34, 10.51, 10.43, 12.18, 10.94, 10.35, 10.56, 10.14, 10.43, 10.11, 10.12, 10.16, 10.11, 10.22, 10.98, 10.26, 10.60, 10.59, 10.61, 10.71, 10.01, 10.34, 10.46, 10.34, 10.91, 10.35, 10.40, 11.19, 10.42, 10.52, 10.51, 10.55, 10.96, 10.78, 10.16, 10.53, 10.41, 10.38, 10.42, 10.25, 10.37, 10.59, 10.39, 10.71, 9.93, 10.07, 10.82),
+  `200m` = c(20.81, 20.06, 20.81, 20.68, 20.58, 20.43, 21.52, 20.22, 20.80, 21.04, 21.05, 23.20, 21.90, 20.65, 20.52, 20.65, 20.69, 20.38, 20.33, 20.37, 20.21, 20.71, 21.82, 20.62, 21.42, 21.49, 20.96, 21.00, 19.72, 20.81, 20.66, 20.89, 21.94, 20.77, 20.92, 22.45, 21.30, 20.95, 20.88, 21.16, 21.78, 21.64, 20.24, 21.17, 20.98, 21.28, 20.77, 20.61, 20.46, 21.29, 21.09, 21.43, 19.75, 20.00, 21.86),
+  `400m` = c(46.84, 44.84, 46.82, 45.04, 45.91, 45.21, 48.30, 45.68, 46.20, 47.30, 46.10, 52.94, 48.66, 45.64, 45.89, 46.80, 45.49, 45.28, 44.87, 44.50, 44.93, 46.56, 48.40, 46.02, 45.73, 47.80, 46.30, 47.80, 45.26, 45.86, 44.92, 46.90, 47.30, 47.40, 46.30, 47.70, 46.10, 45.10, 46.10, 46.71, 47.90, 46.24, 45.36, 46.70, 45.87, 47.40, 45.98, 45.63, 45.78, 46.80, 47.91, 47.60, 43.86, 44.60, 49.00),
+  `800m` = c(1.81, 1.74, 1.79, 1.73, 1.80, 1.73, 1.80, 1.76, 1.79, 1.81, 1.82, 2.02, 1.87, 1.76, 1.78, 1.82, 1.74, 1.73, 1.73, 1.73, 1.70, 1.78, 1.89, 1.77, 1.76, 1.84, 1.79, 1.77, 1.73, 1.79, 1.73, 1.79, 1.85, 1.82, 1.82, 1.88, 1.80, 1.74, 1.74, 1.76, 1.90, 1.81, 1.76, 1.79, 1.76, 1.88, 1.76, 1.77, 1.78, 1.79, 1.83, 1.79, 1.73, 1.75, 2.02),
+  `1500m` = c(3.70, 3.57, 3.60, 3.60, 3.75, 3.66, 3.85, 3.63, 3.71, 3.73, 3.74, 4.24, 3.84, 3.58, 3.61, 3.82, 3.61, 3.57, 3.56, 3.53, 3.51, 3.64, 3.80, 3.62, 3.73, 3.92, 3.56, 3.72, 3.60, 3.64, 3.55, 3.77, 3.77, 3.67, 3.80, 3.83, 3.65, 3.62, 3.54, 3.62, 4.01, 3.83, 3.60, 3.62, 3.64, 3.89, 3.55, 3.61, 3.55, 3.77, 3.84, 3.67, 3.53, 3.59, 4.24),
+  `3000m` = c(14.04, 13.28, 13.26, 13.22, 14.68, 13.62, 14.45, 13.55, 13.61, 13.90, 13.49, 16.70, 14.03, 13.42, 13.50, 14.91, 13.27, 13.34, 13.17, 13.21, 13.01, 14.59, 14.16, 13.49, 13.77, 14.73, 13.32, 13.66, 13.23, 13.41, 13.10, 13.96, 14.13, 13.64, 14.64, 15.06, 13.46, 13.36, 13.21, 13.34, 14.72, 14.74, 13.29, 13.13, 13.25, 15.11, 13.31, 13.29, 13.22, 14.07, 15.23, 13.56, 13.20, 13.20, 16.28),
+  Marathon = c(137.72, 128.30, 135.90, 129.95, 146.62, 133.13, 139.95, 130.15, 134.03, 133.53, 131.35, 164.70, 136.58, 134.32, 130.78, 154.12, 130.87, 132.30, 129.92, 132.23, 129.13, 134.60, 139.33, 132.58, 131.98, 148.83, 132.35, 137.55, 131.08, 128.63, 129.75, 136.25, 130.87, 141.27, 154.10, 152.23, 129.20, 129.02, 128.98, 131.48, 148.22, 145.27, 131.58, 128.65, 132.50, 157.77, 131.57, 130.63, 131.20, 139.27, 149.90, 131.50, 128.22, 130.55, 161.83),
+  Country = c("Argentina", "Australia", "Austria", "Belgium", "Bermuda", 
+                "Brazil", "Burma", "Canada", "Chile", "China", 
+                "Columbia", "Cook Islands", "Costa Rica", "Czech Republic", 
+                "Denmark", "Dominican Republic", "Finland", "France", 
+                "GDR", "FRG", "GBNI", "Greece", "Guatemala", "Hungary", 
+                "India", "Indonesia", "Ireland", "Israel", "Italy", 
+                "Japan", "Kenya", "Korea", "DPR Korea", "Luxembourg", 
+                "Malaysia", "Mauritius", "Mexico", "Netherlands", 
+                "New Zealand", "Norway", "PNG", "Philippines", "Poland", 
+                "Portugal", "Romania", "Singapore", "Spain", "Sweden", 
+                "Switzerland", "Taipei", "Thailand", "Turkey", "USA", 
+                "USSR", "Western Samoa"))
+
+```
+
+```{r echo = FALSE}
+women_speed <- women %>%
+  mutate(
+    Speed_100m = 100 / `100m`,
+    Speed_200m = 200 / `200m`,
+    Speed_400m = 400 / `400m`,
+    Speed_800m = 800 / (`800m` * 60),  # Convert minutes to seconds
+    Speed_1500m = 1500 / (`1500m` * 60), # Convert minutes to seconds
+    Speed_3000m = 3000 / (`3000m` * 60), # Convert minutes to seconds
+    Speed_Marathon = 42195 / (Marathon * 60) # Convert minutes to seconds
+  ) %>%
+  select(starts_with("Speed_"))
+
+men_speed <- men %>%
+  mutate(
+    Speed_100m = 100 / `100m`,
+    Speed_200m = 200 / `200m`,
+    Speed_400m = 400 / `400m`,
+    Speed_800m = 800 / (`800m` * 60),  # Convert minutes to seconds
+    Speed_1500m = 1500 / (`1500m` * 60), # Convert minutes to seconds
+    Speed_3000m = 3000 / (`3000m` * 60), # Convert minutes to seconds
+    Speed_Marathon = 42195 / (Marathon * 60) # Convert minutes to seconds
+  ) %>%
+  select(starts_with("Speed_"))
+```
+
+```{r include=FALSE}
+library(MASS)
+```
+
+### Women Track Records 
+
+#### Single Linkage Hierarchical: 
+
+This technique evaluates the distance between clusters as the minimum distance between any single point in one cluster and any single point in the other cluster, effectively chaining together nearby clusters.
+
+```{r echo = FALSE, fig.width = 6, fig.height = 5}
+#| label: fig-cap-margin1
+#| fig-cap: "Dendrogram of Women's Track Records using Single Linkage Hierarchical Clustering"
+
+# Calculating the distance matrix
+dist_matrix <- dist(women_speed, method = "euclidean")
+
+# Hierarchical clustering using Single Linkage
+hc_single <- hclust(dist_matrix, method = "single")
+
+# Plotting the dendrogram
+plot(hc_single, main = "Hierarchical Clustering with Single Linkage", xlab = "", ylab = "Height", labels = women$Country, cex = 0.6, hang = -1)
+```
+
+Figure 1 presents the dendrogram resulting from this analysis. Each country's track record is represented by a leaf on the tree, and the 'height' at which two leaves merge represents the distance between clusters. It allows us to visualize the similarities between countries' track performances at a glance, revealing which countries have closely related track record profiles and which stand apart. For example, Western Samoa and Cook Islands, which are joined at a very low height, have more similar track performance profiles compared to the Dominican Republic, which joins at a higher point, indicating a less similar performance profile relative to the rest.
+
+
+#### Complete Linkage Hierarchical:
+
+This dendrogram (Figure 2) represents the hierarchical clustering of countries using the complete linkage method, which considers the maximum distance between any member of one cluster and any member of another cluster. This method typically results in more evenly sized and well-separated clusters.
+
+
+```{r echo = FALSE, fig.width = 6, fig.height = 5}
+#| label: complete linkage
+#| fig-cap: "Dendrogram of Women's Track Records using Complete Linkage Hierarchical Clustering"
+
+# Complete linkage clustering
+hc_complete <- hclust(dist_matrix, method = "complete")
+
+# Plot the dendrogram
+plot(hc_complete, main = "Hierarchical Clustering with Complete Linkage", xlab = "", ylab = "Height", labels = women$Country, cex = 0.6, hang = -1)
+```
+
+The clusters formed here can provide valuable insights into which countries have similar athletic performance profiles and which are markedly different. It can also suggest potential groupings for more detailed analysis.
+
+For instance, we observe Western Samoa and Cook Islands forming a cluster at a relatively low height, indicating a closer similarity in track performance. On the other hand, countries like the Dominican Republic, which join at higher heights, exhibit track records that are less similar to those of other countries, suggesting unique performance characteristics within this dataset.
+
+#### K-means Nonhierarchical:
+
+The K-means clustering algorithm was employed to segment the countries into groups based on their Women's Track Records. This nonhierarchical method organizes the data into clusters such that each point belongs to the cluster with the nearest mean, which is calculated as the average of the points within the cluster.
+
+```{r echo = FALSE, fig.width = 11, fig.height = 4, warning=FALSE}
+#| label: fig-main-margin-cap1
+#| fig-cap: "K-means Nonhierarchical Clustering of Women's Track Records"
+
+set.seed(123) # for reproducibility
+km_res <- kmeans(women_speed, centers = 3, nstart = 25)
+
+# Adding cluster assignments to the data
+women_speed$Cluster <- km_res$cluster
+
+# Characterize clusters by calculating the mean for each speed event
+cluster_characteristics <- aggregate(. ~ Cluster, data = women_speed, mean)
+
+# Plot clusters
+fviz_cluster(list(data = women_speed[,1:7], cluster = factor(km_res$cluster),
+                  main = "Cluster Plot")) +
+  ggrepel::geom_text_repel(aes(label = women$Country)) +
+  theme_cool
+
+```
+
+Figure 3 displays the clusters formed by the K-means algorithm. The two-dimensional plot, with axes likely representing the principal components of the dataset, reveals the distribution of countries into three distinct clusters. Each cluster is denoted by a unique color and contains countries whose track performance metrics are similar to each other and different from those in other clusters. The spread of the clusters across the principal components reflects the diversity in performance data.
+
+For example, Western Samoa and Cook Islands are positioned closely within the same cluster, suggesting similarity in their track performance characteristics. In contrast, the Dominican Republic, located near the center of the plot, may represent average performance characteristics relative to the global dataset.
+
+### Men Track Records
+
+#### Single Linkage Hierarchical: 
+
+Now, we applied single linkage hierarchical clustering to the Men's Track Records to identify how countries cluster based on their athletic performance data. 
+
+```{r echo = FALSE, fig.width = 6, fig.height = 5}
+#| label: fig-cap-margin
+#| fig-cap: "Dendrogram of Hierarchical Clustering with Single Linkage for men"
+
+# Calculating the distance matrix
+dist_matrix <- dist(men_speed, method = "euclidean")
+
+# Hierarchical clustering using Single Linkage
+hc_single <- hclust(dist_matrix, method = "single")
+
+# Plotting the dendrogram
+plot(hc_single, main = "Hierarchical Clustering with Single Linkage", xlab = "", ylab = "Height", labels = men$Country, cex = 0.6, hang = -1)
+```
+
+As shown in Figure 4, the dendrogram for the men's data replicates the 'chaining effect' seen in the women's data, where countries are joined together based on the closest distances between their records. The similarity in the structure of the men's and women's dendrograms suggests a consistency in track performance across genders that may be influenced by factors such as national athletic policies, training standards, or geographic and cultural elements. The consistency between the men's and women's results may also provide an opportunity to delve into a deeper comparative analysis. 
+
+#### Complete Linkage Hierarchical:
+
+In a similar process to the Women's Track Records, the Men's Track Records were subjected to complete linkage hierarchical clustering. 
+
+```{r echo = FALSE, fig.width = 6, fig.height = 5}
+#| label: complete linkage for men
+#| fig-cap: "Dendrogram resulting from hierarchical clustering using complete linkage for men"
+
+# Complete linkage clustering
+hc_complete <- hclust(dist_matrix, method = "complete")
+
+# Plot the dendrogram
+plot(hc_complete, main = "Hierarchical Clustering with Complete Linkage", xlab = "", ylab = "Height", labels = men$Country, cex = 0.6, hang = -1)
+```
+
+The dendrogram presented in Figure 5 indicates how the countries are clustered based on the complete linkage criterion. The structure of the dendrogram reveals tight clusters where countries are closely related in terms of track performance, as well as more isolated countries that stand apart from the rest. 
+
+The similarity in the clustering patterns of the Men's Track Records to those of the Women's could suggest overarching trends in athletics that transcend gender, potentially pointing to broader national characteristics that impact track performance.
+
+#### K-means Nonhierarchical:
+
+As depicted in Figure 6, the cluster plot maps each country to a two-dimensional space defined by the first and second principal components, which explain a significant portion of the variance within the dataset. The countries are color-coded based on the cluster to which they are assigned, illustrating the grouping determined by the K-means algorithm.
+
+```{r echo = FALSE, fig.width = 11, fig.height = 4, warning=FALSE}
+#| label: fig-main-margin-cap
+#| fig-cap: "K-means Nonhierarchical Clustering of Men's Track Records"
+
+# Assuming the optimal number is found (for example, say it's 4)
+set.seed(123) # for reproducibility
+km_res <- kmeans(men_speed, centers = 4, nstart = 25)
+
+# Adding cluster assignments to the data
+men_speed$Cluster <- km_res$cluster
+
+# Characterize clusters by calculating the mean for each speed event
+cluster_characteristics <- aggregate(. ~ Cluster, data = men_speed, mean)
+
+# Plot clusters
+fviz_cluster(list(data = men_speed[,1:7], cluster = factor(km_res$cluster),
+                  main = "Cluster Plot")) +
+  ggrepel::geom_text_repel(aes(label = men$Country)) +
+  theme_cool
+
+```
+
+Based on Figure 6, countries such as Cook Islands and Western Samoa, shown at the periphery of the plot, may have unique performance profiles that starkly differ from the global trend.
+
+"Dim1" (horizontal axis) accounts for 81.5% of the variance, while "Dim2" (vertical axis) explains 11.6%, signaling that 'Dim1' captures the bulk of the performance characteristics.
+
+This clustering analysis provides insights into the similarities and differences in track performances among the countries and can be particularly revealing when compared to the clusters formed within the Women's Track Records. 
+
+#### Compare Results
+
+Certain countries consistently appeared in similar clusters across both genders, which may indicate a universal strength or strategy in track and field within those nations.
+
+Other countries showed distinct differences in their clustering between the men's and women's datasets, possibly reflecting gender-specific advantages or focus areas in their athletic training programs.
+
+### Canonical Discriminant Analysis
+
+```{r echo = FALSE, warning=FALSE}
+#| label: Canonical Discriminant Analysis
+#| fig-cap: "Canonical Discriminant Analysis of women's speed event data, with countries plotted according to their scores on the first two discriminant functions"
+
+cda <- lda(Cluster ~ ., data = women_speed)
+print(cda)
+
+lda_data <- as.data.frame(predict(cda)$x)
+
+lda_data$Cluster <- women_speed$Cluster
+lda_data$Country <- women$Country
+
+ggplot(lda_data, aes(x=LD1, y=LD2, color=factor(Cluster), label=Country)) +
+  geom_point() +
+  ggrepel::geom_text_repel() +
+  ggtitle("Canonical Discriminant Analysis") +
+  xlab("Canonical Variable 1 (LD1)") +
+  ylab("Canonical Variable 2 (LD2)") 
+
+```
+
+In the application of Canonical Discriminant Analysis to the cluster assignments derived from the women's speed data, we observe a pronounced distinction among the groups when analyzed through the lens of canonical variables, LD1 and LD2. The prior probabilities of the groups—approximately 49% for Cluster 1, 42% for Cluster 2, and 9% for Cluster 3—lay the groundwork for our expectations regarding group prevalence.
+
+The group means highlight distinct performance profiles across the speed events, with Cluster 1 exhibiting superior endurance as evidenced by faster marathon times, while Cluster 2 showcases consistently quicker times across all events, signaling a well-rounded athletic prowess.
+
+The canonical coefficients reveal the relative influence of each event on the discriminant functions. LD1, which explains a substantial 95.91% of the variance between the groups, seems to encapsulate an endurance-sprint spectrum. Higher speeds in the marathon, 3000m, 800m, and 200m events draw countries towards the positive side of LD1, while quicker 100m, 400m, and 1500m times pull them towards the negative. This suggests that LD1 may be viewed as an axis contrasting sprint-oriented prowess with endurance-focused capability.
+
+Conversely, LD2 accounts for a mere 4.09% of the group variance, yet it provides nuanced differentiation where shorter events like the 100m dash and 800m run inversely affect this discriminant, and longer events such as the 1500m and Marathon positively contribute to it. 
+
+Figure 7 illustrates the segregation of countries based on sprint and endurance capabilities along LD1, while LD2 further refines the distinction in intermediate athletic events. Notably, outliers such as the Cook Islands and Western Samoa reveal distinctive performance profiles, highlighting the global diversity of athletic talent.
+
+## Part II
+
+### Introduction
+
+In this section of our analysis, we turn our attention to the US Crime Data, a comprehensive set of statistics reflecting the reported crime rates across the 50 states in 1985. This dataset encapsulates various dimensions of crime, from violent offenses such as murder and assault to property crimes like burglary and auto theft, contextualized by state-specific demographic information including land area and population. By examining these variables, we aim to uncover underlying patterns and regional trends in criminal activity, providing a quantitative foundation for understanding the distribution of crime across the United States. The insights garnered from this analysis hold the potential to inform policy decisions, focus crime prevention efforts, and enhance the allocation of resources for law enforcement.
+
+### Methodology
+
+The dataset comprises 12 variables, ranging from land area and population to various crime categories, alongside regional classifications. Given the differences in state populations, crime figures were normalized per 100,000 inhabitants to calculate standardized crime rates. While the land area (X2) and population (X3) are included to provide context to the crime figures, identifiers such as the state name (X1), region (X11), and division (X12) are excluded to focus on the statistical relationships and patterns inherent in the crime data itself.
+
+### Questions
+
+(a) Perform a preliminary analysis via covariance and correlation matrices.
+
+(b) Perform a complete principal component analysis. Your analysis and discussion should include (but not limited) a choice of PCA on covariance or correlation matrix, number of PCs, adequacy of the number, interpretation of the selected PCs, scatter plots of eigenvectors and PCs and discussion on possible outliers and groups, and further discussions.
+
+(c) Perform a complete factor analysis. Your analysis and discussion should include (but not limited) a choice of the number of factors and a chi-square test for the adequacy, interpretation of the rotated and unrotated factor loadings with plots, comparison of your findings with the preliminary analysis, interpretation of the communality and specific variance, scatter plots of factor scores and discussion on possible outliers and groups, and further discussions.
+
+```{r echo = FALSE}
+# Create the tibble
+crime_data <- tibble(
+  state = c("ME", "NH", "VT", "MA", "RI", "CT", "NY", "NJ", "PA", "OH", "IN", "IL", "MI", "WI", "MN", 
+            "IA", "MO", "ND", "SD", "NE", "KS", "DE", "MD", "VA", "WV", "NC", "SC", "GA", "FL", "KY", 
+            "TN", "AL", "MS", "AR", "LA", "OK", "TX", "MT", "ID", "WY", "CO", "NM", "AZ", "UT", "NV", 
+            "WA", "OR", "CA", "AK", "HI"),
+  land = c(33265, 9279, 9614, 8284, 1212, 5018, 49108, 7787, 45308, 41330, 36185, 56345, 58527, 56153, 84402, 
+           56275, 69697, 70703, 77116, 77355, 82277, 2044, 10460, 40767, 24231, 52669, 31113, 58910, 58664, 40409, 
+           42144, 51705, 47689, 53187, 47751, 69956, 266807, 147046, 83564, 97809, 104091, 121593, 114000, 84899, 
+           110561, 68138, 97073, 158706, 591004, 6471),
+  popu = c(1164, 998, 535, 5822, 968, 3174, 17783, 7562, 11853, 10744, 5499, 11535, 9088, 4775, 4193, 2884, 
+           5029, 685, 708, 1606, 2450, 622, 4392, 5706, 1936, 6255, 3347, 5976, 11366, 3726, 4762, 4021, 2613, 
+           2359, 4481, 3301, 16370, 826, 1005, 509, 3231, 1450, 3187, 1645, 936, 4409, 2687, 26365, 521, 1054),
+  murd = c(1.5, 2, 1.3, 3.5, 3.2, 3.5, 7.9, 5.7, 5.3, 6.6, 4.8, 9.6, 9.4, 2, 2, 1.9, 10.7, 0.5, 3.8, 3, 4.8, 
+           7.7, 9.2, 8.4, 6.2, 11.8, 14.6, 15.3, 12.7, 11.1, 8.8, 11.7, 11.5, 10.1, 11.7, 5.9, 11.6, 3.2, 4.6, 
+           5.7, 6.2, 9.4, 9.5, 3.4, 8.8, 3.5, 4.6, 6.9, 12.2, 3.6),
+  rape = c(7, 6, 10.3, 12, 3.6, 9.1, 15.5, 12.9, 11.3, 16, 17.9, 20.4, 27.1, 6.7, 9.7, 6.2, 27.4, 6.2, 11.1, 
+           9.3, 14.5, 18.6, 23.9, 15.4, 6.7, 12.9, 18.1, 10.1, 22.2, 13.7, 15.5, 18.5, 8.9, 17.1, 23.1, 15.6, 
+           21, 10.5, 12.3, 12.3, 36, 21.7, 27, 10.9, 19.6, 18, 18, 35.1, 26.1, 11.8),
+  robb = c(12.6, 12.1, 7.6, 99.5, 78.3, 70.4, 443.3, 169.4, 106, 145.9, 107.5, 251.1, 346.6, 33.1, 89.1, 28.6, 
+           200.8, 6.5, 17.1, 57.3, 75.1, 105.5, 338.6, 92, 27.3, 53, 60.1, 95.8, 186.1, 72.8, 82, 50.3, 19, 45.6, 
+           140.8, 54.9, 134.1, 22.3, 20.5, 22, 129.1, 66.1, 120.2, 53.1, 188.4, 93.5, 102.5, 206.9, 71.8, 63.3),
+  assa = c(62, 36, 55, 88, 120, 87, 209, 90, 90, 116, 95, 187, 193, 44, 51, 48, 167, 21, 60, 115, 108, 196, 253, 
+           143, 84, 293, 193, 177, 277, 123, 169, 215, 140, 150, 238, 127, 195, 75, 86, 73, 185, 196, 214, 70, 
+           182, 106, 132, 226, 168, 43),
+  burg = c(562, 566, 731, 1134, 1019, 1084, 1414, 1041, 594, 854, 860, 765, 1571, 539, 802, 507, 1187, 286, 471, 
+           505, 882, 1056, 1051, 806, 389, 766, 1025, 900, 1562, 704, 807, 763, 351, 885, 890, 841, 1151, 594, 
+           674, 646, 1381, 1142, 1493, 915, 1661, 1441, 1273, 1753, 790, 1456),
+  larc = c(1055, 929, 969, 1531, 2186, 1751, 2025, 1689, 1001, 1944, 1791, 2028, 2897, 1860, 1902, 1743, 2074, 
+           1295, 1396, 1572, 2302, 2320, 2417, 1980, 774, 1338, 1509, 1869, 2861, 1212, 1025, 1125, 694, 1211, 
+           1628, 1661, 2183, 1956, 2214, 2049, 2992, 2408, 3550, 2833, 3044, 2853, 2825, 3422, 2183, 3106),
+  auto = c(146, 172, 124, 878, 859, 484, 682, 557, 340, 493, 429, 518, 464, 218, 346, 175, 538, 91, 
+           94, 292, 257, 559, 548, 297, 92, 169, 256, 309, 397, 346, 289, 223, 78, 109, 385, 280, 
+           394, 222, 144, 165, 588, 392, 501, 316, 661, 362, 333, 689, 551, 581),
+  reg = c(1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3, 3, 
+          3, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4),
+  div = c(1, 1, 1, 1, 1, 1, 2, 2, 2, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 5, 5, 5, 5, 5, 5, 5, 5, 6, 
+          6, 6, 6, 7, 7, 7, 7, 8, 8, 8, 8, 8, 8, 8, 8, 9, 9, 9, 9, 9)
+)
+
+```
+
+### Preliminary Analysis: Covariance and Correlation
+
+In our preliminary analysis of the US Crime Data, we employed covariance analysis to gauge the extent of variation between different types of crimes, complemented by a correlation analysis that revealed the strength and direction of their relationships. These statistical tools provided key insights into how various crime rates and demographic factors interrelate, laying the groundwork for a more detailed examination of the data.
+
+```{r echo = FALSE}
+
+# Calculate the covariance matrix
+cov_matrix <- cov(crime_data[, -c(1, 11, 12)])  # Excluding non-numeric columns such as state names
+
+# Calculate the correlation matrix
+cor_matrix <- cor(crime_data[, -c(1, 11, 12)])  # Excluding non-numeric columns such as state names
+
+kbl(cov_matrix, digits = 2, booktabs = T, caption = "Covariance Matrix Table") %>%
+  kable_styling(latex_options = c("striped", "hold_position", "scale_down"))
+```
+
+```{r echo = FALSE}
+
+kbl(cor_matrix, digits = 3, booktabs = T, caption = "Correlation Matrix Table") %>%
+  kable_styling(latex_options = c("striped", "hold_position", "scale_down"))
+```
+
+
+### Principal Component Analysis (PCA)
+
+In our PCA, we chose the correlation matrix over the covariance matrix due to the differing scales of the variables in our dataset. This approach standardizes the variance across variables, ensuring a more balanced representation in the analysis.
+
+```{r echo = FALSE}
+crime_data_std <- scale(crime_data[, -c(1, 11, 12)])
+
+pca_result <- prcomp(crime_data_std)
+summary(pca_result)
+```
+
+The Principal Component Analysis (PCA) of the US Crime Data resulted in nine principal components (PCs), each explaining a portion of the total variance in the data. The selection of the number of components was guided by the cumulative proportion of variance explained. The first three components (PC1, PC2, and PC3) together account for approximately 78.73% of the total variance. This significant proportion suggests that these three components are adequate to capture the majority of the information in the dataset, representing a balance between simplifying the data and retaining its key features.
+
+```{r echo = FALSE}
+#| label: PCA plot3
+#| fig-cap: "Elbow Plot of US Crime Data"
+
+# Scree plot to visualize the importance of components
+fviz_eig(pca_result, addlabels = TRUE) +
+  theme_cool
+```
+
+```{r echo=FALSE}
+# Interpretation of Selected PCs
+loadings <- pca_result$rotation
+loadings
+```
+
+### Interpretation of Selected PCs
+
+- **PC1:** Being the most dominant component, PC1 explains about 49.58% of the variance. This component likely represents a general crime factor, possibly aggregating common features across various types of crime.
+
+- **PC2:** The second component accounts for 16.32% of the variance and might capture aspects of crime that are orthogonal to those represented by PC1, perhaps distinguishing between violent and property crimes or other nuanced distinctions in crime patterns.
+
+- **PC3:** With 12.83% variance explained, PC3 could be representing another distinct dimension of crime, potentially correlating with either socio-economic factors or specific types of crimes not encapsulated by the first two components.
+
+```{r echo=FALSE}
+#| label: PCA plot4
+#| fig-cap: "PCA Biplot of US Crime Data"
+
+ fviz_pca_biplot(pca_result, label = "var",
+                 col.ind = "#696969",
+                 col.var = "#2E9FDF", repel = TRUE) +
+    ggrepel::geom_text_repel(aes(label = crime_data$state), color = "#696969") +
+  theme_cool
+```
+
+Figure 9 presents a biplot of the PCA, where states are distributed according to their crime profiles against the first two principal components, revealing clusters and potential outliers. For instance, states like Mississippi (MS) are positioned distinctly, suggesting unique crime characteristics. The vectors for crime types, particularly "murd" and"assa", indicate a strong positive correlation. Whereas, "burg" and "larc", indicate a strong negative correlation amongst the variables, reflecting their significant contribution to the principal components.
+
+### Factor Analysis
+
+This technique is designed to identify latent factors that can explain the patterns of correlation observed among various crime statistics. Factor analysis simplifies the data by reducing the number of variables into a smaller set of interpretable factors.
+
+#### Unrotated Loadings:
+
+```{r echo = FALSE}
+#| label: factor plot
+#| fig-cap: "Unrotated Loadings for US Crime Data"
+
+fact_analysis <- factanal(crime_data_std, factors = 3, scores = "regression", rotation = "none")
+print(fact_analysis)
+
+# Plot factor loadings
+fa.diagram(fact_analysis$loadings)
+```
+
+The sum of squared loadings (SS loadings) for each factor demonstrates the amount of variance explained, with Factor1 explaining 45.9%, Factor2 contributing 14.1%, and Factor3 accounting for 8.8% of the total variance. Cumulatively, these factors explain 68.8% of the variance in the crime data, with the chi-square test for the hypothesis that three factors are sufficient yielding a p-value of 0.0814.
+
+#### Rotated Loadings: 
+
+```{r echo = FALSE}
+#| label: PCA plot
+#| fig-cap: "Rotated Loadings of US Crime Data"
+
+fact_analysis_rotation <- factanal(crime_data_std, factors = 3, scores = "regression",rotation="varimax")
+print(fact_analysis_rotation)
+
+# Plot factor loadings
+fa.diagram(fact_analysis_rotation$loadings)
+```
+
+The sum of squared loadings for Factor1 now accounts for 26.2% of the variance, Factor2 for 22.1%, and Factor3 for 20.5%. Collectively, these factors explain approximately 68.8% of the total variance in the dataset. The chi-square test for the hypothesis that three factors are sufficient remains at a p-value of 0.0814, supporting the adequacy of the three-factor solution, although with marginal certainty given the p-value is slightly above the conventional threshold for significance.
+
+#### Interpretation of the Communality and Specific Variance:
+
+```{r echo = FALSE}
+#| label: tbl-planet-measures
+#| tbl-cap: "Communalities and Specific Variances Table"
+
+# Communalities
+communality <- fact_analysis$uniquenesses
+
+# Extract specific variances (uniquenesses)
+specific_variances <- 1 - communality
+
+data <- data.frame(Communality = communality, Specific_Var = specific_variances)
+
+kbl(data, booktabs = T, col.names = c("Communalities", "Specific Variances")) %>%
+  kable_styling(latex_options = c("striped", "hold_position"))
+```
+
+The communalities from our factor analysis indicate that variables such as murder, assault, burglary, and larceny are largely explained by the underlying factors, reflecting that these aspects of crime data share common patterns. However, the specific variances for land and population size are comparatively high, suggesting unique influences on these variables not captured by the extracted factors. 
+
+#### Scatter plots of factor scores for m = 3: 
+
+```{r echo = FALSE, fig.width = 8, fig.height = 6}
+#| label: factor plot8
+#| fig-cap: "Scatter Plot of States by Factor 1 vs Factor 2 and Factor 1 vs Factor 3"
+
+# Convert the factor scores to a data frame for plotting
+factor_scores_df <- as.data.frame(fact_analysis$scores)
+
+# Create a scatter plot for the first two factors using ggplot2
+p1 <- ggplot(factor_scores_df, aes(x = Factor1, y = Factor2)) +
+  geom_point(color = "#391954") +
+  ggrepel::geom_text_repel(aes(label = crime_data$state)) +
+  labs(title = "Factor 1 vs Factor 2",
+       x = "Factor 1 Scores",
+       y = "Factor 2 Scores")
+
+p2 <- ggplot(factor_scores_df, aes(x = Factor1, y = Factor3)) +
+  geom_point(color = "#01084f") +
+  ggrepel::geom_text_repel(aes(label = crime_data$state)) +
+  labs(title = "Factor 1 vs Factor 3",
+       x = "Factor 1 Scores",
+       y = "Factor 3 Scores")
+
+p1 / p2
+```
+
+Based on Figure 12:
+
+**Factor 1 vs Factor 2:**
+The position of states such as California (CA) and Arizona (AZ) with higher scores on Factor 3 suggests a higher prevalence of the types of crimes encapsulated by this factor.
+
+**Factor 1 vs Factor 3:**
+Potential outliers such as California (CA), which appears far along Factor 2, may indicate a disproportionately high rate of the violent crimes that Factor 2 represents.
